@@ -45,6 +45,15 @@
 #define BTCGETFRIENDLYNAME          123
 #define BTCBONDSTAT                 124
 
+#define SOCKETOPENSOCK              130
+#define SOCKETCLOSESOCK             131
+#define SOCKETSEND                  132
+#define SOCKETREADDATA              133
+#define STREAMBRIDGE                140
+#define STREAMUNBRIDGE              141
+#define STREAMGETSPPHANDLE          142
+#define STREAMGETSOCKETHANDLE       143
+
 #define EV_BTCSTART                  200
 #define EV_SPPCONN                   201
 #define EV_BTC_SPP_CONN_TIMEOUT      202
@@ -57,7 +66,10 @@
 #define EV_INQRESP                   209
 #define EV_BTC_INQUIRY_TIMEOUT       210
 #define EV_BTC_DISCOV_TIMEOUT        211
-#define EV_BTCEND                    300
+#define EV_SOCKET_DATA_RECEIVED      220
+#define EV_SOCKETCREATED             221
+#define EV_SOCKETCLOSED              222
+#define EV_BTCEND                    250
 
 #define MSG_INQRESP                  301
 
@@ -87,7 +99,7 @@ dim rspType
 //==============================================================================
 sub AssertResCode(resCode)
 	if rc !=0 then
-		print "error: ";integer.h' rc;"\n"
+		//print "error: ";integer.h' rc;"\n"
 	endif
 endsub
 
@@ -144,10 +156,10 @@ function HandlerPinRequest()
     dim eventStr$, mac$, rc, rcStr$
     SPRINT #eventStr$, event
     rc=BtcGetPinRequestBDAddr(mac$)
+    SPRINT #rcStr$, rc
     if rc==0 then
-        rsp$ = eventStr$ + " " + mac$
+        rsp$ = eventStr$ + " " + rcStr$ + " " + mac$
     else
-        SPRINT #rcStr$, rc
         rsp$ = eventStr$ + " " + rcStr$
     endif
     rc = SocketSend(gHandle,rsp$)
@@ -197,7 +209,7 @@ function HandlerInqResp(respType) as integer
 
     SPRINT #eventStr$, event
     marker$ = " "
-    SPRINT #resp$, respType
+    SPRINT #resp$,respType
     rsp$ = eventStr$ + marker$ + resp$
 
     rc = BtcInquiryGetReport(ad$,dta$,ndx,rsi)
@@ -224,6 +236,7 @@ function HandlerInqResp(respType) as integer
                         ad$ = StrHexize$(ad$)
                     else
                         StrDeescape(ad$)
+                        ad$ = "/22" + ad$ + "/22"
                     endif
 
                     //print the last 2 hex digits of the tag, and the data
@@ -241,6 +254,58 @@ function HandlerInqResp(respType) as integer
     rc = SocketSend(gHandle,rsp$)
 endfunc 1
 
+function DeTokenizeStr(byref deToken$ as string)
+    dim rc : rc = 1
+    dim pos, len, newLen
+    dim sTok$ : sTok$ = "/22"
+    pos = STRPOS(deToken$, sTok$, 0)
+    if pos == 1 then
+        StrShiftLeft(deToken$,4)
+        len = strlen(deToken$)
+        newLen = len - 3
+        deToken$ = LEFT$(deToken$, newLen)
+        rc = 0
+    endif
+endfunc rc
+
+function TokenizeStr(byref token$ as string)
+    dim rc : rc = 0
+    dim sVar$
+    sVar$ = "/22" + token$ + "/22"
+    token$ = sVar$
+endfunc rc
+
+function HandlerSocketCreated(nHandle) as integer
+    dim event,rsp$,handleRsp$: event=EV_SOCKETCREATED
+
+    if gHandle == 0 then
+	gHandle = nHandle
+	exitfunc 2
+    endif
+    SPRINT #rsp$,event
+    sprint #handleRsp$,nHandle
+    rsp$ = rsp$ + " " + handleRsp$
+    rc = SocketSend(gHandle,rsp$)
+endfunc 1
+
+function HandlerSocketClosed(nHandle) as integer
+    dim event,rsp$,handleRsp$: event=EV_SOCKETCLOSED
+    SPRINT #rsp$,event
+    sprint #handleRsp$,nHandle
+    rsp$ = rsp$ + " " + handleRsp$
+    rc = SocketSend(gHandle,rsp$)
+endfunc 1
+
+function SocketRx(nHandle,nLength)
+    dim event,rsp$,handleRsp$,lengthRsp$ : event=EV_SOCKET_DATA_RECEIVED
+    SPRINT #rsp$,event
+    sprint #handleRsp$,nHandle
+    sprint #lengthRsp$,nLength
+    rsp$ = rsp$ + " " + handleRsp$ + " " + lengthRsp$
+    rc = SocketSend(gHandle,rsp$)
+endfunc 1
+
+
 '//==============================================================================
 '// Called after SendMsgApp is called. Used to switch between command, rfcomm, and
 '// gatttool listen modes
@@ -250,153 +315,231 @@ function HandlerRxSocket(nHandle,nLength) as integer
     dim nSize : nSize = 0
     dim msg$
     dim rsp$
-    dim token, tknlen,timeout,flag, tokenStr$
+    dim token, tknlen,nLen
     dim var1, var2, var3, var4
-    dim sVar1$, sVar2$, sVar3$, sVar4$, sLen$
-    dim nLen, msgid, mac$
-    gHandle = nHandle
-    rc = SocketReadData(msg$,nSock,nSize)
-    tknlen = ExtractIntToken(msg$,token)
-    rc=1
+    dim sVar1$, sVar2$, sVar3$, sVar4$
+    dim tokenStr$,sLen$
 
-    SELECT token
-    CASE BTCINQUIRYCONFIG
-        tknlen = ExtractIntToken(msg$,var1)
-        tknlen = ExtractIntToken(msg$,var2)
-        rc = BtcInquiryConfig(var1, var2)
-        SPRINT #rsp$,rc
 
-    CASE BTCINQUIRYSTART
-        tknlen = ExtractIntToken(msg$,var1)
-        rc = BtcInquiryStart(var1)
-        SPRINT #rsp$,rc
+    if gHandle == 0 then
+        gHandle = nHandle
+    elseif gHandle != nHandle then
+        exitfunc SocketRx(nHandle,nLength)
+    endif
+        rc = SocketReadData(msg$,nSock,nSize)
+	    tknlen = ExtractIntToken(msg$,token)
+        rc=1
 
-    CASE BTCINQUIRYCANCEL
-        tknlen = ExtractIntToken(msg$,var1)
-        rc = BtcInquiryCancel()
-        SPRINT #rsp$,rc
+        SELECT token
+        CASE BTCINQUIRYCONFIG
+            tknlen = ExtractIntToken(msg$,var1)
+            tknlen = ExtractIntToken(msg$,var2)
+            rc = BtcInquiryConfig(var1, var2)
+            SPRINT #rsp$,rc
 
-    CASE BTCGETPAIRREQUESTBDADDR
-        rc=BtcGetPairRequestBDAddr(mac$)
-        mac$ = StrHexize$(mac$)
-        SPRINT #rsp$,rc
-        rsp$ = rsp$ + " " + mac$
+        CASE BTCINQUIRYSTART
+            tknlen = ExtractIntToken(msg$,var1)
+            rc = BtcInquiryStart(var1)
+            SPRINT #rsp$,rc
 
-    CASE BTCSENDPAIRRESP
-        tknlen = ExtractIntToken(msg$,var1)
-        rc=BtcSendPairResp(var1)
-        SPRINT #rsp$,rc
+        CASE BTCINQUIRYCANCEL
+            tknlen = ExtractIntToken(msg$,var1)
+            rc = BtcInquiryCancel()
+            SPRINT #rsp$,rc
 
-    CASE BTCSENDPINRESP
-        tknlen = ExtractStrToken(msg$,tokenStr$)
-        rc=BtcSendPINResp(tokenStr$)
-        SPRINT #rsp$,rc
+        CASE BTCGETPAIRREQUESTBDADDR
+            rc=BtcGetPairRequestBDAddr(sVar1$)
+            sVar1$ = StrHexize$(sVar1$)
+            SPRINT #rsp$,rc
+            rsp$ = rsp$ + " " + sVar1$
 
-    CASE BTCSAVEPAIRING
-        tknlen = ExtractIntToken(msg$,var1)
-        rc=BtcSavePairings(var1)
-        SPRINT #rsp$,rc
+        CASE BTCSENDPAIRRESP
+            tknlen = ExtractIntToken(msg$,var1)
+            rc=BtcSendPairResp(var1)
+            SPRINT #rsp$,rc
 
-    CASE BTCPAIR
-        tknlen = ExtractStrToken(msg$,tokenStr$)
-        tknlen = ExtractIntToken(msg$,var1)
-        tokenStr$ = StrDehexize$(tokenStr$)
-        rc=BtcPair(tokenStr$, var1)
-        SPRINT #rsp$,rc
+        CASE BTCSENDPINRESP
+            tknlen = ExtractStrToken(msg$,sVar1$)
+            rc=BtcSendPINResp(sVar1$)
+            SPRINT #rsp$,rc
 
-    CASE BTCDISCOVERYCONFIG
-        tknlen = ExtractIntToken(msg$,var1)
-        tknlen = ExtractIntToken(msg$,var2)
-        rc=BtcDiscoveryConfig(var1,var2)
-        SPRINT #rsp$,rc
+        CASE BTCSAVEPAIRING
+            tknlen = ExtractIntToken(msg$,var1)
+            rc=BtcSavePairings(var1)
+            SPRINT #rsp$,rc
 
-    CASE BTCSETDISCOVERABLE
-        tknlen = ExtractIntToken(msg$,var1)
-        tknlen = ExtractIntToken(msg$,var2)
-        rc=BtcSetDiscoverable(var1,var2)
-        SPRINT #rsp$,rc
+        CASE BTCPAIR
+            tknlen = ExtractStrToken(msg$,sVar1$)
+            tknlen = ExtractIntToken(msg$,var1)
+            sVar1$ = StrDehexize$(sVar1$)
+            rc=BtcPair(sVar1$, var1)
+            SPRINT #rsp$,rc
 
-    CASE BTCSETCONNECTABLE
-        tknlen = ExtractIntToken(msg$,var1)
-        rc=BtcSetConnectable(var1)
-        SPRINT #rsp$,rc
+        CASE BTCDISCOVERYCONFIG
+            tknlen = ExtractIntToken(msg$,var1)
+            tknlen = ExtractIntToken(msg$,var2)
+            rc=BtcDiscoveryConfig(var1,var2)
+            SPRINT #rsp$,rc
 
-    CASE BTCSETPAIRABLE
-        tknlen = ExtractIntToken(msg$,var1)
-        rc=BtcSetPairable(var1)
-        SPRINT #rsp$,rc
+        CASE BTCSETDISCOVERABLE
+            tknlen = ExtractIntToken(msg$,var1)
+            tknlen = ExtractIntToken(msg$,var2)
+            rc=BtcSetDiscoverable(var1,var2)
+            SPRINT #rsp$,rc
 
-    CASE BTCGETBDADDRFROMHANDLE
-        dim addr$
-        tknlen = ExtractIntToken(msg$,var1)
-        rc=BtcGetBDAddrFromHandle(var1, addr$)
-        SPRINT #rsp$,rc
-        addr$ = StrHexize$(addr$)
-        rsp$ = rsp$ + " " + addr$
+        CASE BTCSETCONNECTABLE
+            tknlen = ExtractIntToken(msg$,var1)
+            rc=BtcSetConnectable(var1)
+            SPRINT #rsp$,rc
 
-    CASE BTCGETHANDLEFROMBDADDR
-        dim handle, handleStr$
-        tknlen = ExtractStrToken(msg$,tokenStr$)
-        tokenStr$ = StrHexize$(tokenStr$)
-        rc=BtcGetHandleFromBDAddr(tokenStr$, handle)
-        SPRINT #rsp$,rc
-        SPRINT #handleStr$,handle
-        rsp$ = rsp$ + " " + handleStr$
+        CASE BTCSETPAIRABLE
+            tknlen = ExtractIntToken(msg$,var1)
+            rc=BtcSetPairable(var1)
+            SPRINT #rsp$,rc
 
-    CASE BTCGETPINREQUESTBDADDR
-        tknlen = ExtractStrToken(msg$,tokenStr$)
-        rc=BtcSendPINResp(tokenStr$)
-        SPRINT #rsp$,rc
+        CASE BTCSPPCONNECT
+            tknlen = ExtractStrToken(msg$,sVar1$)
+            sVar1$ = StrDehexize$(sVar1$)
+            rc = BtcSppConnect(sVar1$)
+            sprint #rsp$,rc
 
-    CASE BTCSPPWRITE
-        tknlen = ExtractIntToken(msg$,var1)
-        tknlen = ExtractStrToken(msg$,sVar1$)
-        rc = BtcSppWrite(var1, sVar1$,nLen)
-        sprint #rsp$,rc
-        sprint #sLen$,nLen
-        rsp$ = rsp$ + " " + sLen$ + " " + sVar1$
+        CASE BTCSPPDISCONNECT
+            tknlen = ExtractIntToken(msg$,var1)
+            rc = BtcSppDisconnect(var1)
+            sprint #rsp$,rc
 
-    CASE BTCSPPREAD
-        rc = BtcSppRead(var1, sVar1$,nLen)
-        sprint #rsp$,rc
-        sprint #sLen$,nLen
-        sprint #sVar2$,var1
-        rsp$ = rsp$ + " " + sLen$ + " " + sVar1$
+        CASE SOCKETOPENSOCK
+            tknlen = ExtractIntToken(msg$,var1)
+            tknlen = ExtractIntToken(msg$,var2)
+            tknlen = ExtractIntToken(msg$,var3)
+            tknlen = ExtractStrToken(msg$,sVar1$)
+            do
+                tknlen = ExtractStrToken(msg$,sVar2$)
+                if tknlen > 0 then
+                    sVar1$ = sVar1$ + sVar2$
+                endif
+            until tknlen==0
+            rc = SocketOpenSock(sVar1$,var1,var2,var3,var4)
+            sprint #rsp$,rc
+            sprint #sVar4$, var4
+            rsp$ = rsp$ + " " + sVar4$
 
-    CASE BTCSPPCONNECT
-        tknlen = ExtractStrToken(msg$,sVar1$)
-        sVar1$ = StrDehexize$(sVar1$)
-        rc = BtcSppConnect(sVar1$)
-	    sprint #rsp$,rc
+        CASE SOCKETCLOSESOCK
+            tknlen = ExtractIntToken(msg$,var1)
+            rc = SocketCloseSock(var1)
+            sprint #rsp$,rc
 
-    CASE BTCSPPDISCONNECT
-        tknlen = ExtractIntToken(msg$,var1)
-        rc = BtcSppDisconnect(var1)
-        sprint #rsp$,rc
+        CASE SOCKETSEND
+            tknlen = ExtractIntToken(msg$,var1)
+            tknlen = ExtractStrToken(msg$,sVar1$)
+            rc = SocketSend(var1,sVar1$)
+            sprint #rsp$,rc
 
-    CASE BTCSETFRIENDLYNAME
-        tknlen = ExtractStrToken(msg$,tokenStr$)
-        rc=BtcSetFriendlyName(tokenStr$)
-        sprint #rsp$,rc
+        CASE SOCKETREADDATA
+            tknlen = ExtractIntToken(msg$,var1)
+            rc=SocketReadData(sVar1$,var1,var2)
+            sprint #rsp$,rc
+            sprint #sVar2$,var2
+            rsp$ = rsp$ + " " + sVar2$ + " " + sVar1$
 
-    CASE BTCGETFRIENDLYNAME
-        rc=BtcGetFriendlyName(tokenStr$)
-        SPRINT #rsp$,rc
-        var1 = STRLEN(tokenStr$)
-        SPRINT #sVar1$,var1
-        rsp$ = rsp$ + " " + tokenStr$ + " " + sVar1$
+        CASE STREAMBRIDGE
+            print "STREAMBRIDGE"
+            tknlen = ExtractIntToken(msg$,var1)
+            tknlen = ExtractIntToken(msg$,var2)
+            rc=StreamBridge(var1,var2,var3)
+            sprint #rsp$,rc
+            sprint #sVar3$,var3
+            rsp$ = rsp$ + " " + sVar3$
 
-    CASE BTCBONDSTAT
-        rc=BtcBondingStats(var1, var2)
-        SPRINT #rsp$,rc
-        sprint #sVar1$,var1
-        sprint #sVar2$,var2
-        rsp$ = rsp$ + " " + sVar1$ + " " + sVar2$
+        CASE STREAMUNBRIDGE
+            tknlen = ExtractIntToken(msg$,var1)
+            rc=StreamUnBridge(var1)
+            sprint #rsp$,rc
 
-    CASE ELSE
-        print "\nWrong BT command"
+        CASE BTCGETBDADDRFROMHANDLE
+            dim addr$
+            tknlen = ExtractIntToken(msg$,var1)
+            rc=BtcGetBDAddrFromHandle(var1, addr$)
+            SPRINT #rsp$,rc
+            addr$ = StrHexize$(addr$)
+            rsp$ = rsp$ + " " + addr$
 
-    ENDSELECT
+        CASE BTCGETHANDLEFROMBDADDR
+            dim handle, handleStr$
+            tknlen = ExtractStrToken(msg$,tokenStr$)
+            tokenStr$ = StrHexize$(tokenStr$)
+            rc=BtcGetHandleFromBDAddr(tokenStr$, handle)
+            SPRINT #rsp$,rc
+            SPRINT #handleStr$,handle
+            rsp$ = rsp$ + " " + handleStr$
+
+        CASE BTCGETPINREQUESTBDADDR
+            tknlen = ExtractStrToken(msg$,tokenStr$)
+            rc=BtcSendPINResp(tokenStr$)
+            SPRINT #rsp$,rc
+
+        CASE BTCSPPWRITE
+            tknlen = ExtractIntToken(msg$,var1)
+            rc = DeTokenizeStr(msg$)
+            sVar1$ = msg$
+            rc = BtcSppWrite(var1, sVar1$, nLen)
+            sprint #rsp$,rc
+            sprint #sLen$,nLen
+            rsp$ = rsp$ + " " + sLen$
+
+        CASE BTCSPPREAD
+            rc = BtcSppRead(var2, sVar1$,nLen)
+            sprint #rsp$,rc
+            sprint #sLen$,nLen
+            sprint #sVar2$,var1
+            if rc == 0 then
+                var3 = TokenizeStr(sVar1$)
+                rsp$ = rsp$ + " " + sVar2$ + " " + sVar1$ + " " + sLen$
+            endif
+
+        CASE STREAMGETSPPHANDLE
+            tknlen = ExtractIntToken(msg$,var1)
+            rc=StreamGetSPPHandle(var1,var2)
+            sprint #rsp$,rc
+            sprint #sVar2$,var2
+            rsp$ = rsp$ + " " + sVar2$
+
+        CASE STREAMGETSOCKETHANDLE
+            tknlen = ExtractIntToken(msg$,var1)
+            rc=StreamGetSocketHandle(var1,var2)
+            sprint #rsp$,rc
+            sprint #sVar2$,var2
+            rsp$ = rsp$ + " " + sVar2$
+
+        CASE BTCSETFRIENDLYNAME
+            rc = DeTokenizeStr(msg$)
+            sVar1$ = msg$
+            if rc == 0 then
+                rc=BtcSetFriendlyName(sVar1$)
+            endif
+            sprint #rsp$,rc
+
+        CASE BTCGETFRIENDLYNAME
+            rc=BtcGetFriendlyName(tokenStr$)
+            if rc == 0 then
+                var1 = TokenizeStr(tokenStr$)
+            endif
+            SPRINT #rsp$,rc
+            var1 = STRLEN(tokenStr$)
+            SPRINT #sVar1$,var1
+            rsp$ = rsp$ + " " + tokenStr$ + " " + sVar1$
+
+        CASE BTCBONDSTAT
+            rc=BtcBondingStats(var1, var2)
+            SPRINT #rsp$,rc
+            sprint #sVar1$,var1
+            sprint #sVar2$,var2
+            rsp$ = rsp$ + " " + sVar1$ + " " + sVar2$
+
+        CASE ELSE
+            //print "\nWrong BT command"
+
+        ENDSELECT
     rc = SocketSend(nHandle,rsp$)
 endfunc 1
 
@@ -408,18 +551,20 @@ endfunc 1
 // Enable synchronous event handlers
 //------------------------------------------------------------------------------
 // Data received over the UART. Process the data accordingly
-OnEvent EVRECVDATA				call HandlerRxSocket
-OnEvent EVINQRESP               call HandlerInqResp
-OnEvent EVBTC_INQUIRY_TIMEOUT   call HandlerBtcInqTimOut
-OnEvent EVBTC_PIN_REQUEST       call HandlerPinRequest
-OnEvent EVBTC_PAIR_REQUEST      call HandlerPairRequest
-OnEvent EVBTC_PAIR_RESULT       call HandlerPairRes
-Onevent EVBTC_DISCOV_TIMEOUT    call HandlerDiscTimeout
-OnEvent EVSPPCONN               call HandlerSppConn
-OnEvent EVSPPDISCON             call HandlerSppDiscon
-OnEvent EVBTC_SPP_DATA_RECEIVED call HandlerRxData
-OnEvent EVBTC_SPP_CONN_TIMEOUT  call HandlerSppConnTO
-OnEvent EVSPPTXEMPTY            call HandlerSppTxEmpty
+OnEvent EVSOCKET_DATA_RECEIVED      	call HandlerRxSocket
+OnEvent EVINQRESP               	call HandlerInqResp
+OnEvent EVBTC_INQUIRY_TIMEOUT   	call HandlerBtcInqTimOut
+OnEvent EVBTC_PIN_REQUEST       	call HandlerPinRequest
+OnEvent EVBTC_PAIR_REQUEST      	call HandlerPairRequest
+OnEvent EVBTC_PAIR_RESULT       	call HandlerPairRes
+Onevent EVBTC_DISCOV_TIMEOUT    	call HandlerDiscTimeout
+OnEvent EVSPPCONN               	call HandlerSppConn
+OnEvent EVSPPDISCON             	call HandlerSppDiscon
+OnEvent EVBTC_SPP_DATA_RECEIVED 	call HandlerRxData
+OnEvent EVBTC_SPP_CONN_TIMEOUT  	call HandlerSppConnTO
+OnEvent EVSPPTXEMPTY            	call HandlerSppTxEmpty
+OnEvent EVSOCKETCREATED         	call HandlerSocketCreated
+OnEvent EVSOCKETCLOSED          	call HandlerSocketClosed
 
 dim handle
 dim hSpp
@@ -427,15 +572,9 @@ dim hSpp
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 // Open a socket and start a listener
-rc = SocketOpenSock(path$,0,1,handle)
-if rc==0 then
-	rc = SocketStartListener(handle)
-endif
+rc=SocketOpenSock(path$,0,1,1,handle)
 
 rc=BtcSppOpen(hSpp)
-if rc != 0 then
-    print "\n Unable to open SPP socket"; rc
-endif
 
 //------------------------------------------------------------------------------
 // Wait for a synchronous event.
