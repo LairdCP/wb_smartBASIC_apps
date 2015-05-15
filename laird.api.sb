@@ -44,15 +44,15 @@
 #define BTCSETFRIENDLYNAME          122
 #define BTCGETFRIENDLYNAME          123
 #define BTCBONDSTAT                 124
+#define SOCKETOPENSOCK              125
+#define SOCKETCLOSESOCK             126
+#define SOCKETSEND                  127
+#define SOCKETREADDATA              128
+#define STREAMBRIDGE                129
+#define STREAMUNBRIDGE              130
+#define STREAMGETSPPHANDLE          131
+#define STREAMGETSOCKETHANDLE       132
 
-#define SOCKETOPENSOCK              130
-#define SOCKETCLOSESOCK             131
-#define SOCKETSEND                  132
-#define SOCKETREADDATA              133
-#define STREAMBRIDGE                140
-#define STREAMUNBRIDGE              141
-#define STREAMGETSPPHANDLE          142
-#define STREAMGETSOCKETHANDLE       143
 
 #define EV_BTCSTART                  200
 #define EV_SPPCONN                   201
@@ -66,9 +66,9 @@
 #define EV_INQRESP                   209
 #define EV_BTC_INQUIRY_TIMEOUT       210
 #define EV_BTC_DISCOV_TIMEOUT        211
-#define EV_SOCKET_DATA_RECEIVED      220
-#define EV_SOCKETCREATED             221
-#define EV_SOCKETCLOSED              222
+#define EV_SOCKET_DATA_RECEIVED      212
+#define EV_SOCKETCREATED             213
+#define EV_SOCKETCLOSED              214
 #define EV_BTCEND                    250
 
 #define MSG_INQRESP                  301
@@ -531,7 +531,10 @@ function HandlerRxSocket(nHandle,nLength) as integer
 
         CASE BTCBONDSTAT
             rc=BtcBondingStats(var1, var2)
-            SPRINT #rsp$,rc
+            if rc > 0 then
+                rc = 0
+                SPRINT #rsp$,rc
+            endif
             sprint #sVar1$,var1
             sprint #sVar2$,var2
             rsp$ = rsp$ + " " + sVar1$ + " " + sVar2$
