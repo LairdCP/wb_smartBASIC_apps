@@ -52,6 +52,7 @@
 #define STREAMUNBRIDGE              130
 #define STREAMGETSPPHANDLE          131
 #define STREAMGETSOCKETHANDLE       132
+#define BTCGETMACADDRESS            133
 
 
 #define EV_BTCSTART                  200
@@ -539,6 +540,14 @@ function HandlerRxSocket(nHandle,nLength) as integer
             sprint #sVar2$,var2
             rsp$ = rsp$ + " " + sVar1$ + " " + sVar2$
 
+        CASE BTCGETMACADDRESS
+            sVar1$ = SYSINFO$(4)
+            sVar1$ = right$(sVar1$, 6)
+            sVar1$ = StrHexize$(sVar1$)
+            rc = 0
+            SPRINT #rsp$,rc
+            rsp$ = rsp$ + " " + sVar1$
+
         CASE ELSE
             //print "\nWrong BT command"
 
@@ -572,12 +581,14 @@ OnEvent EVSOCKETCLOSED          	call HandlerSocketClosed
 dim handle
 dim hSpp
 
+
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 // Open a socket and start a listener
 rc=SocketOpenSock(path$,0,1,1,handle)
 
 rc=BtcSppOpen(hSpp)
+
 
 //------------------------------------------------------------------------------
 // Wait for a synchronous event.
