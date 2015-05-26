@@ -86,6 +86,8 @@ dim gHandle
 dim path$ as STRING
 path$ = "/tmp/lrdbt1"
 dim rspType
+dim handle
+dim hSpp
 
 //******************************************************************************
 // Initialise Global Variable
@@ -291,8 +293,12 @@ endfunc 1
 
 function HandlerSocketClosed(nHandle) as integer
     dim event,rsp$,handleRsp$: event=EV_SOCKETCLOSED
+    dim rc
+    rc = SocketOpenSock(path$,0,1,1,handle)
+    rc = BtcSppOpen(hSpp)
     SPRINT #rsp$,event
     sprint #handleRsp$,nHandle
+    gHandle = 0
     rsp$ = rsp$ + " " + handleRsp$
     rc = SocketSend(gHandle,rsp$)
 endfunc 1
@@ -320,7 +326,6 @@ function HandlerRxSocket(nHandle,nLength) as integer
     dim var1, var2, var3, var4
     dim sVar1$, sVar2$, sVar3$, sVar4$
     dim tokenStr$,sLen$
-
 
     if gHandle == 0 then
         gHandle = nHandle
@@ -577,9 +582,6 @@ OnEvent EVBTC_SPP_CONN_TIMEOUT  	call HandlerSppConnTO
 OnEvent EVSPPTXEMPTY            	call HandlerSppTxEmpty
 OnEvent EVSOCKETCREATED         	call HandlerSocketCreated
 OnEvent EVSOCKETCLOSED          	call HandlerSocketClosed
-
-dim handle
-dim hSpp
 
 
 //------------------------------------------------------------------------------
