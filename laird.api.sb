@@ -142,12 +142,6 @@ function HandlerSppConnTO()
     rc = SocketSend(gHandle,rsp$)
 endfunc 1
 
-function HandlerSppTxEmpty(hndl)
-    dim event,rsp$ : event = EV_SPPTXEMPTY
-    SPRINT #rsp$, event
-    rc = SocketSend(gHandle,rsp$)
-endfunc 1
-
 function HandlerDiscTimeout()
     dim event,rsp$ : event=EV_BTC_DISCOV_TIMEOUT
     SPRINT #rsp$,event
@@ -579,7 +573,6 @@ OnEvent EVSPPCONN               	call HandlerSppConn
 OnEvent EVSPPDISCON             	call HandlerSppDiscon
 OnEvent EVBTC_SPP_DATA_RECEIVED 	call HandlerRxData
 OnEvent EVBTC_SPP_CONN_TIMEOUT  	call HandlerSppConnTO
-OnEvent EVSPPTXEMPTY            	call HandlerSppTxEmpty
 OnEvent EVSOCKETCREATED         	call HandlerSocketCreated
 OnEvent EVSOCKETCLOSED          	call HandlerSocketClosed
 
