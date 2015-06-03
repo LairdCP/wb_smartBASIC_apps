@@ -443,7 +443,6 @@ function HandlerRxSocket(nHandle,nLength) as integer
             rsp$ = rsp$ + " " + sVar2$ + " " + sVar1$
 
         CASE STREAMBRIDGE
-            print "STREAMBRIDGE"
             tknlen = ExtractIntToken(msg$,var1)
             tknlen = ExtractIntToken(msg$,var2)
             rc=StreamBridge(var1,var2,var3)
