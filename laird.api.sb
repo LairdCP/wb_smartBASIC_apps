@@ -466,7 +466,7 @@ function HandlerRxSocket(nHandle,nLength) as integer
         CASE BTCGETHANDLEFROMBDADDR
             dim handle, handleStr$
             tknlen = ExtractStrToken(msg$,tokenStr$)
-            tokenStr$ = StrHexize$(tokenStr$)
+            tokenStr$ = StrDehexize$(tokenStr$)
             rc=BtcGetHandleFromBDAddr(tokenStr$, handle)
             SPRINT #rsp$,rc
             SPRINT #handleStr$,handle
