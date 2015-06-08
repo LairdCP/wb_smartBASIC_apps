@@ -490,7 +490,7 @@ function HandlerRxSocket(nHandle,nLength) as integer
             rc = BtcSppRead(var2, sVar1$,nLen)
             sprint #rsp$,rc
             sprint #sLen$,nLen
-            sprint #sVar2$,var1
+            sprint #sVar2$,var2
             if rc == 0 then
                 var3 = TokenizeStr(sVar1$)
                 rsp$ = rsp$ + " " + sVar2$ + " " + sVar1$ + " " + sLen$
