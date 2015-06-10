@@ -154,6 +154,7 @@ function HandlerPinRequest()
     SPRINT #eventStr$, event
     rc=BtcGetPinRequestBDAddr(mac$)
     SPRINT #rcStr$, rc
+    mac$ = StrHexize$(mac$)
     if rc==0 then
         rsp$ = eventStr$ + " " + rcStr$ + " " + mac$
     else
@@ -185,7 +186,6 @@ function HandlerPairRes(nRes)
     rsp$ = eventStr$ + " " + rcStr$
     rc = SocketSend(gHandle,rsp$)
 endfunc 1
-
 
 function HandlerScanTO()
     dim event,rsp$ : event=EV_BTC_INQUIRY_TIMEOUT
