@@ -228,13 +228,13 @@ endfunc 1
 function HandlerInqResp(respType) as integer
     dim event,rsp$ : event = MSG_INQRESP
     dim marker$, eventStr$, resp$, rsi$, ad$, adr$, dta$, ndx, rsi, bdaddr$, EIR$, tag
-
     SPRINT #eventStr$, event
     marker$ = " "
     SPRINT #resp$,respType
     rsp$ = eventStr$ + marker$ + resp$
 
     rc = BtcInquiryGetReport(ad$,dta$,ndx,rsi)
+
     if strcmp(adr$,ad$)!= 0 then
         bdaddr$ = StrHexize$(ad$)
         rsp$ = rsp$ + marker$ + bdaddr$
@@ -257,10 +257,8 @@ function HandlerInqResp(respType) as integer
                     if tag < 0x08 || tag > 0x09 then
                         ad$ = StrHexize$(ad$)
                     else
-                        StrDeescape(ad$)
                         ad$ = "/22" + ad$ + "/22"
                     endif
-
                     //print the last 2 hex digits of the tag, and the data
                     if strlen(ad$)!=0 then
                         rsp$ = rsp$ + marker$ + RIGHT$(tg$,2)
