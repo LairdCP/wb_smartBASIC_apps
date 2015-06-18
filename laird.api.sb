@@ -113,12 +113,20 @@ sub Initialise()
 
 endsub
 
+function TokenizeEvent(byref token$ as string)
+    dim rc : rc = 0
+    dim sVar$
+    sVar$ = "/24" + token$ + "/24"
+    token$ = sVar$
+endfunc rc
+
 function HandlerSppConn(hConn, result) as integer
     dim event,rsp$,sConn$,sResult$ : event=EV_SPPCONN
     SPRINT #rsp$,event
     SPRINT #sConn$,hConn
     SPRINT #sResult$,result
     rsp$ = rsp$ + " " + sConn$ + " " + sResult$
+    rc = TokenizeEvent(rsp$)
     rc = SocketSend(gHandle,rsp$)
 endfunc 1
 
@@ -127,24 +135,36 @@ function HandlerSppDiscon(portHndl)
     SPRINT #rsp$,event
     SPRINT #sPortHndl$,portHndl
     rsp$ = rsp$ + " " + sPortHndl$
+    rc = TokenizeEvent(rsp$)
     rc = SocketSend(gHandle,rsp$)
 endfunc 1
+
+function HandlerSppTxEmpty(hndl)
+    dim event,rsp$ : event=EV_SPPTXEMPTY
+    SPRINT #rsp$,event
+    rc = TokenizeEvent(rsp$)
+    rc = SocketSend(gHandle,rsp$)
+endfunc 1
+
 
 function HandlerRxData()
     dim event, rsp$ : event = EV_BTC_SPP_DATA_RECEIVED
     SPRINT #rsp$, event
+    rc = TokenizeEvent(rsp$)
     rc = SocketSend(gHandle,rsp$)
 endfunc 1
 
 function HandlerSppConnTO()
     dim event,rsp$ : event = EV_BTC_SPP_CONN_TIMEOUT
     SPRINT #rsp$, event
+    rc = TokenizeEvent(rsp$)
     rc = SocketSend(gHandle,rsp$)
 endfunc 1
 
 function HandlerDiscTimeout()
     dim event,rsp$ : event=EV_BTC_DISCOV_TIMEOUT
     SPRINT #rsp$,event
+    rc = TokenizeEvent(rsp$)
     rc = SocketSend(gHandle,rsp$)
 endfunc 1
 
@@ -160,6 +180,7 @@ function HandlerPinRequest()
     else
         rsp$ = eventStr$ + " " + rcStr$
     endif
+    rc = TokenizeEvent(rsp$)
     rc = SocketSend(gHandle,rsp$)
 endfunc 1
 
@@ -175,6 +196,7 @@ function HandlerPairRequest()
     else
         rsp$ = eventStr$ + " " + rcStr$
     endif
+    rc = TokenizeEvent(rsp$)
     rc = SocketSend(gHandle,rsp$)
 endfunc 1
 
@@ -184,18 +206,21 @@ function HandlerPairRes(nRes)
     SPRINT #eventStr$, event
     SPRINT #rcStr$, nRes
     rsp$ = eventStr$ + " " + rcStr$
+    rc = TokenizeEvent(rsp$)
     rc = SocketSend(gHandle,rsp$)
 endfunc 1
 
 function HandlerScanTO()
     dim event,rsp$ : event=EV_BTC_INQUIRY_TIMEOUT
     SPRINT #rsp$,event
+    rc = TokenizeEvent(rsp$)
     rc = SocketSend(gHandle,rsp$)
 endfunc 1
 
 function HandlerBtcInqTimOut() as integer
     dim event,rsp$ : event=EV_BTC_INQUIRY_TIMEOUT
     SPRINT #rsp$,event
+    rc = TokenizeEvent(rsp$)
     rc = SocketSend(gHandle,rsp$)
 endfunc 1
 
@@ -248,6 +273,7 @@ function HandlerInqResp(respType) as integer
             endif
         endif
     endif
+    rc = TokenizeEvent(rsp$)
     rc = SocketSend(gHandle,rsp$)
 endfunc 1
 
@@ -269,6 +295,13 @@ function TokenizeStr(byref token$ as string)
     dim rc : rc = 0
     dim sVar$
     sVar$ = "/22" + token$ + "/22"
+    token$ = sVar$
+endfunc rc
+
+function TokenizeMssg(byref token$ as string)
+    dim rc : rc = 0
+    dim sVar$
+    sVar$ = "/23" + token$ + "/23"
     token$ = sVar$
 endfunc rc
 
@@ -549,7 +582,8 @@ function HandlerRxSocket(nHandle,nLength) as integer
         CASE ELSE
             //print "\nWrong BT command"
 
-        ENDSELECT
+    ENDSELECT
+    var3 = TokenizeMssg(rsp$)
     rc = SocketSend(nHandle,rsp$)
 endfunc 1
 
@@ -574,6 +608,7 @@ OnEvent EVBTC_SPP_DATA_RECEIVED 	call HandlerRxData
 OnEvent EVBTC_SPP_CONN_TIMEOUT  	call HandlerSppConnTO
 OnEvent EVSOCKETCREATED         	call HandlerSocketCreated
 OnEvent EVSOCKETCLOSED          	call HandlerSocketClosed
+OnEvent EVSPPTXEMPTY                call HandlerSppTxEmpty
 
 
 //------------------------------------------------------------------------------
