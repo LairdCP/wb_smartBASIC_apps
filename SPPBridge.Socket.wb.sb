@@ -1,0 +1,345 @@
+//******************************************************************************
+//	SPPBridge.Socket.wb.sb
+//##############################################################################
+//#
+//#  WB45 SPP <-> Socket Bridging
+//#
+//#
+//##############################################################################
+//# Version history in reverse chronological order
+//##############################################################################
+//#
+//#  --------------------------------------------------------------------------
+//#  ::Changelog::
+//#    06/08/15 -> 0.0.1
+//#        Initial release for review
+//#  ---------------------------------------------------------------------------
+//#
+//##############################################################################
+//
+//###############################################################################
+//###############################################################################
+//#  This file contains a minimal app for bridging SPP - Socket data
+//#
+//#		In this application, the WB is made discoverable, connectable and pairable
+//#		An spp server is opened and a listening socket is initiated. The application
+//#		then sits in a WAITEVENT
+//#
+//##############################################################################
+//
+//
+//******************************************************************************
+//
+//
+//******************************************************************************
+//# Below is a list of commonly tweaked options.
+//# Advanced defines exist in the code and are coupled at the point they are used.
+//# They may also be tweaked but may effect application performance.
+//
+//******************************************************************************
+// User changable #defines
+//******************************************************************************
+	// Miscellaneous BT defines
+#define DEVICE_NAME				"WB45 SPP-Socket"	// Name of the device
+
+#define BTC_PIN					"1234"                  // Default PIN code (legacy devices only)
+
+	// Miscellaneous Socket defines
+#define SOCKET_PATH				""			// Set this to an empty string for IPV4 sockets
+									// Set this to file path for UNIX sockets (e.g. "/tmp/BtSocket")
+
+#define SOCKET_PORT			3000
+
+#define SOCKET_DOMAIN_UNIX		0
+#define SOCKET_DOMAIN_IPV4		1
+
+#define SOCKET_TYPE_STREAM		0
+
+//******************************************************************************
+// Debugging defines
+//******************************************************************************
+#set $cmpif, 0x00				// Set this bitmask to enable the relevent checks (set to 0xFF for all)
+//******************************************************************************
+#define DEBUG_FUNCTION_RC_FLAG	  (0x01)			// Set to this bitmask to check the value of RC
+#define DEBUG_ASSERT_FLAG	  (0x02)			// Set to this bitmask for asserts
+#define DEBUG_BTCMSG_FLAG         (0x04)			// Set to this bitmask for BTC related debug msgs
+#define DEBUG_SOCKETMSG_FLAG	  (0x08)			// Set to this bitmask for Socket related debug msgs
+#define DEBUG_BRIDGEMSG_FLAG	  (0x10)			// Set to this bitmask for Bridge related debug msgs
+
+#define DEBUG_ALL_FLAG			  (0xFF)
+//******************************************************************************
+// Global Variables
+//******************************************************************************
+    //--------------------------------------------------------------------------
+    //many functions return a resultCode, predefining that variable makes it convenient
+dim rc
+    //--------------------------------------------------------------------------
+    //Handle for open SPP port
+dim hSPPPort
+    //--------------------------------------------------------------------------
+    //Handle for an active SPP connection
+dim hSPPConn
+    //--------------------------------------------------------------------------
+    //Handle for an socket SPP connection
+dim hSocketConn
+    //--------------------------------------------------------------------------
+    //Flag if there is a 'SPP Connection'
+dim fSppConnection
+    //--------------------------------------------------------------------------
+    //Flag if there is a 'Socket Connection'
+dim fSocketConnection
+
+//******************************************************************************
+// Debugging helper functions
+//******************************************************************************
+
+//--------------------------------------------------------------------------
+// For debugging
+//--------------------------------------------------------------------------
+#cmpif DEBUG_ALL_FLAG : dim dbg$	// General debug string
+#cmpif DEBUG_ALL_FLAG : sub DbgPrint()
+#cmpif DEBUG_ALL_FLAG :     print dbg$
+#cmpif DEBUG_ALL_FLAG : endsub
+
+//--------------------------------------------------------------------------
+// For debugging :: will inspect the global 'rc' variable
+//--------------------------------------------------------------------------
+#cmpif DEBUG_FUNCTION_RC_FLAG : sub DbgAssertRC(ln as integer)   
+#cmpif DEBUG_FUNCTION_RC_FLAG :     if rc!=0 then
+#cmpif DEBUG_FUNCTION_RC_FLAG :         sprint #dbg$, "\nDEBUG: Fail :";integer.h' rc;" at tag ";ln : DbgPrint()
+#cmpif DEBUG_FUNCTION_RC_FLAG :     endif
+#cmpif DEBUG_FUNCTION_RC_FLAG : endsub
+
+//--------------------------------------------------------------------------
+// For debugging :: will inspect that v1==v2     
+//--------------------------------------------------------------------------
+#cmpif DEBUG_ASSERT_FLAG : sub DbgAssert(v1 as integer, v2 as integer, ln as integer)
+#cmpif DEBUG_ASSERT_FLAG :    if v1 != v2 then
+#cmpif DEBUG_ASSERT_FLAG :        sprint #dbg$, "\nDEBUG: Fail Assert:";integer.h' v1;" ";integer.h' v2; " at tag ";ln : DbgPrint()
+#cmpif DEBUG_ASSERT_FLAG :    endif
+#cmpif DEBUG_ASSERT_FLAG : endsub
+
+//--------------------------------------------------------------------------
+// Initialise the BT device to be discoverable, connectable and pairable
+//--------------------------------------------------------------------------
+sub InitialiseBT()
+
+	// Set device to be disconverable inifinitely
+	rc = BtcSetDiscoverable(1, 0)
+	#cmpif DEBUG_FUNCTION_RC_FLAG : DbgAssertRC(1000)
+	// Set device to be connectable
+	rc = BtcSetConnectable(1)
+	#cmpif DEBUG_FUNCTION_RC_FLAG : DbgAssertRC(1010)
+	// Set device to be pairable
+	rc = BtcSetPairable(1)
+	#cmpif DEBUG_FUNCTION_RC_FLAG : DbgAssertRC(1020)
+	// Set the device to bond with subsequent pairing devices
+	rc = BtcSavePairings(1)
+	#cmpif DEBUG_FUNCTION_RC_FLAG : DbgAssertRC(1030)
+	// Open an SPP server
+	rc = BtcSppOpen(hSPPPort)
+	#cmpif DEBUG_FUNCTION_RC_FLAG : DbgAssertRC(1040)
+	// Set the Bluetooth friendly name
+	rc = BtcSetFriendlyName(DEVICE_NAME)
+	#cmpif DEBUG_FUNCTION_RC_FLAG : DbgAssertRC(1050)
+
+endsub
+
+//--------------------------------------------------------------------------
+// Opening a listening socket server
+//--------------------------------------------------------------------------
+sub InitialiseSocket()
+
+	dim nHandle					// This is the handle of the listening socket (returned). Can be used to close it
+	dim path$					// The path to the socket. Set this to "" if it's IPV4 socket
+	path$ = SOCKET_PATH
+
+	// Open a listening socket and wait for incoming connection
+	rc = SocketOpenSock(path$, SOCKET_PORT, SOCKET_DOMAIN_IPV4, SOCKET_TYPE_STREAM, nHandle)
+	#cmpif DEBUG_FUNCTION_RC_FLAG : DbgAssertRC(2000)
+
+endsub
+
+//******************************************************************************
+// Handler definitions
+//******************************************************************************
+
+//------------------------------------------------------------------------------
+// Called when there is a pairing request from another device
+//------------------------------------------------------------------------------
+function HandlerPairReq()
+
+	// Always accept this pairing request for now
+	rc = BtcSendPAIRResp(1)
+	#cmpif DEBUG_FUNCTION_RC_FLAG : DbgAssertRC(7000)
+
+endfunc 1
+
+//------------------------------------------------------------------------------
+// Called on a pin request from a legacy device
+//------------------------------------------------------------------------------
+function HandlerPINReq()
+
+	dim pin$					// The pin code to send to the legacy device
+	pin$ = BTC_PIN				// Change this define at the beginning of the file 
+
+	rc = BtcSendPINResp(pin$)
+	#cmpif DEBUG_FUNCTION_RC_FLAG : DbgAssertRC(7100)
+
+endfunc 1
+
+//------------------------------------------------------------------------------
+// Called after a pairing attempt
+//------------------------------------------------------------------------------
+function HandlerPairRes(res)
+
+    if res !=0 then
+		#cmpif DEBUG_BTCMSG_FLAG : sprint #dbg$,  "\nPairing attempt failed" : DbgPrint()
+	else
+		#cmpif DEBUG_BTCMSG_FLAG : sprint #dbg$,  "\nPairing attempt successful" : DbgPrint()
+	endif
+
+endfunc 1
+
+//------------------------------------------------------------------------------
+// Called when an SPP connection occurs
+//------------------------------------------------------------------------------
+function HndlrSPPConn(hConn, nRes)
+
+	// We should only get success
+	if nRes != 0 then
+		#cmpif DEBUG_BTCMSG_FLAG : sprint #dbg$,  "\nSPP Connection failed : ";nRes : DbgPrint()
+		// We dont want to do anything more so just exit
+		exitfunc 1
+	endif
+
+	// If we are already connected, force a disconnect, we only want one spp connection
+	if fSppConnection == 1 then
+		#cmpif DEBUG_BTCMSG_FLAG : sprint #dbg$,  "\nSPP Connection exists" : DbgPrint()
+		rc = BtcSPPDisconnect(hConn)
+		#cmpif DEBUG_FUNCTION_RC_FLAG : DbgAssertRC(3000)
+	else
+		// Set the SPP flag so that we know we are in a connection
+		fSppConnection = 1
+		//store the SPP connection handle
+		hSPPConn = hConn
+		#cmpif DEBUG_BTCMSG_FLAG : sprint #dbg$,  "\nSPP Connected" : DbgPrint()
+
+	endif
+
+endfunc 1
+
+//------------------------------------------------------------------------------
+// Called when an SPP connection has been terminated
+//------------------------------------------------------------------------------
+function HndlrSPPDiscon(hConn)
+
+	// Make sure that this disconnection happened on our main SPP connection
+	if hConn == hSPPConn then
+		// Clear the SPP connection flags so that we can accept future connections
+		fSppConnection = 0
+		#cmpif DEBUG_BTCMSG_FLAG : sprint #dbg$,  "\nSPP Disconnected" : DbgPrint()
+	endif
+
+endfunc 1
+
+//------------------------------------------------------------------------------
+// Called when we have incoming data over the SPP connection
+//------------------------------------------------------------------------------
+function HndlrSPPData()
+
+	dim hConn					// On return this will contain the handle of the connection
+	dim data$					// On return this variable will contain data read from the SPP connection
+	dim nLength					// On return this will contain the length of the data read
+
+	// Read the incoming SPP data
+	rc = BtcSppRead(hConn, data$, nLength)
+	#cmpif DEBUG_FUNCTION_RC_FLAG : DbgAssertRC(4000)
+	#cmpif DEBUG_BTCMSG_FLAG : sprint #dbg$,  "\nSPP Data received : ";data$ : DbgPrint()
+	// We have incoming SPP data, check if w have a socket connection
+	if fSocketConnection == 1 then
+		// BRIDGE: Send the received socket data over the SPP connection
+		rc = SocketWrite(hSocketConn, data$)
+		#cmpif DEBUG_FUNCTION_RC_FLAG : DbgAssertRC(4010)
+	endif
+
+endfunc 1
+//------------------------------------------------------------------------------
+// Called when we have an incoming socket connection
+//------------------------------------------------------------------------------
+function HndlrSockConn(hConn)
+
+	// If we are already connected, force a disconnect, we only want one socket connection
+	if fSocketConnection == 1 then
+		#cmpif DEBUG_SOCKETMSG_FLAG : sprint #dbg$,  "\nSocket Connection exists" : DbgPrint()
+		rc = SocketDisconnect(hConn)
+		#cmpif DEBUG_FUNCTION_RC_FLAG : DbgAssertRC(5000)
+	else
+		// Set the Socket flag so that we know we are in a connection
+		fSocketConnection = 1
+		//store the SPP connection handle
+		hSocketConn = hConn
+		#cmpif DEBUG_SOCKETMSG_FLAG : sprint #dbg$,  "\nSocket Connected" : DbgPrint()
+	endif
+
+endfunc 1
+
+//------------------------------------------------------------------------------
+// Called when a connection has been terminated (VSP or SPP)
+//------------------------------------------------------------------------------
+function HndlrSockDiscon(hConn)
+
+	// Make sure that this disconnection happened on our main socket connection
+	if hConn == hSocketConn then
+		// Clear the SPP connection flags so that we can accept future connections
+		fSocketConnection = 0
+		#cmpif DEBUG_SOCKETMSG_FLAG : sprint #dbg$,  "\nSocket Disconnected" : DbgPrint()
+	endif
+endfunc 1
+
+//------------------------------------------------------------------------------
+// Called when we have incoming data on the socket connection
+//------------------------------------------------------------------------------
+function HndlrSockDataRx(hConn, nLen)
+
+	dim data$					// On return this will contain data read from the socket connection
+	dim nLength					// On return this will contain the length of the string read
+
+	// Read the incoming socket data
+	rc = SocketReadData(data$, hConn, nLength)
+	#cmpif DEBUG_FUNCTION_RC_FLAG : DbgAssertRC(6000)
+	#cmpif DEBUG_SOCKETMSG_FLAG : sprint #dbg$,  "\nSocket Data received : ";data$ : DbgPrint()
+	// We have incoming socket data, check if w have an SPP connection
+	if fSppConnection == 1 then
+		// BRIDGE: Send the received socket data over the SPP connection
+		rc = BtcSppWrite(hSPPConn, data$, nLength)
+		#cmpif DEBUG_FUNCTION_RC_FLAG : DbgAssertRC(6010)
+	endif
+
+endfunc 1
+
+//******************************************************************************
+// Equivalent to main() in C
+//******************************************************************************
+
+InitialiseBT()
+InitialiseSocket()
+
+//Enable synchronous event handlers
+OnEvent  EVBTC_PAIR_REQUEST             call HandlerPairReq
+OnEvent  EVBTC_PIN_REQUEST              call HandlerPinReq
+OnEvent  EVBTC_PAIR_RESULT              call HandlerPairRes
+
+OnEvent EvSPPConn		        call HndlrSPPConn
+OnEvent EvSPPDiscon			call HndlrSPPDiscon
+OnEvent EVBTC_SPP_DATA_RECEIVED         call HndlrSPPData
+
+OnEvent EVSOCKET_DATA_RECEIVED		call HndlrSockDataRx
+OnEvent EvSocketCONN	                call HndlrSockConn
+OnEvent EvSocketDISCON                  call HndlrSockDiscon
+
+//------------------------------------------------------------------------------
+// Wait for a synchronous event.
+// An application can have multiple <WaitEvent> statements
+//------------------------------------------------------------------------------
+WaitEvent
