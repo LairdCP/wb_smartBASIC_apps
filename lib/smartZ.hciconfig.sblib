@@ -1,16 +1,9 @@
 //******************************************************************************
 // Laird Technologies (c) 2014
 //
-// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-// +++++                                                                      ++
-// +++++  When UwTerminal downloads the app it will store it as a filenname   ++
-// +++++  which consists of all characters up to the first . and excluding it ++
-// +++++                                                                      ++
-// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-//
 // This library file provides hciconfig commands to be used by smartZ and should be
 // #included into the file 'smartZ.sb' if running on a dual mode module
-// e.g. BT900.
+// e.g. LAIRD WB.
 //
 //******************************************************************************
 // Function and Subroutine definitions
@@ -299,10 +292,11 @@ sub _hciCfg()
 		//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 		elseif strcmp(tkn$, "version")==0 then
 			// Display version information
-			dim fw, X, Y, Z
+			dim fw, W, X, Y, Z
 			fw = SYSINFO(3)
-			X = (fw >> 24) & 0xFF
-			Y = (fw >>  8) & 0xFFFF
+			W = (fw >> 26) & 0xFF
+			X = (fw >> 20) & 0xF
+			Y = (fw >>  6) & 0xFF
 			Z = (fw      ) & 0xFF
 			print "\nApp Version: smartZ Version ";mjVersion;".";mnVersion;"\n"
 			print "Device Name: ";BleGetDeviceName$();"\n"

@@ -1,16 +1,6 @@
-//******************************************************************************
-// Laird Technologies (c) 2014
-//
-// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-// +++++                                                                      ++
-// +++++  When UwTerminal downloads the app it will store it as a filenname   ++
-// +++++  which consists of all characters up to the first . and excluding it ++
-// +++++                                                                      ++
-// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-//
 // This library file provides commands to control BT Classic operation and should be
 // #included into the file 'cmd.ble.manager.sb' if running on a dual mode module
-// e.g. BT900.
+// e.g. LAIRD WB.
 //
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Convention : (1) Case sensitive, and commands are presented in alphabetic order
@@ -59,14 +49,9 @@
 //   - Open the serial port service and listen for SPP connections. Service handle is returned
 //
 // -----------------------------------------------------------------------------
-// spp param #INTframesize# #INTincomingcredits#
+// spp connect #HEXaddr14Bytes#
 //    --- bluetooth classic functionality ---
-//   - Sets parameters for SPP connections (must be used before connections/servers are established)
-//
-// -----------------------------------------------------------------------------
-// spp connect #HEXaddr6Bytes#
-//    --- bluetooth classic functionality ---
-//   - Connect to an SPP device defined by mac address #HEXaddr6Bytes#. Handle is returned
+//   - Connect to an SPP device defined by mac address #HEXaddr14Bytes#. Handle is returned
 //
 // -----------------------------------------------------------------------------
 // spp disconnect #INThConnSpp#
@@ -142,17 +127,17 @@
 //    - Get the classic BT bonding manager database statistics.
 //
 // -----------------------------------------------------------------------------
-// btc bond addkey #HEXaddr6Bytes# #HEXkey32Bytes# #INTkeyType#
+// btc bond addkey #HEXaddr12Bytes# #HEXkey32Bytes# #INTkeyType#
 //    --- bluetooth classic functionality ---
 //    - Add a link key to the rolling database
 //
 // -----------------------------------------------------------------------------
-// btc bond getkey #HEXaddr6Bytes#
+// btc bond getkey #HEXaddr12Bytes#
 //    --- bluetooth classic functionality ---
 //    - Get a link key from the database for the BT address specified
 //
 // -----------------------------------------------------------------------------
-// btc bond delkey #HEXaddr6Bytes#
+// btc bond delkey #HEXaddr12Bytes#
 //    --- bluetooth classic functionality ---
 //    - Erase a link key from the database for the BT address specified.
 //
@@ -162,7 +147,7 @@
 //    - Erase all link keys in the database (rolling and persistent)
 //
 // -----------------------------------------------------------------------------
-// btc bond persistkey #HEXaddr6Bytes#
+// btc bond persistkey #HEXaddr12Bytes#
 //    --- bluetooth classic functionality ---
 //    - Make a link key persistent by transferring it from the rolling database 
 //      to the persistent database
@@ -183,14 +168,14 @@
 //    - Set whether to save pairing information (Bond) for subsequent incoming
 //      pair requests
 //
-//    - #INTflag# - 0 : Do not store pairing information (Don’t bond)
+//    - #INTflag# - 0 : Do not store pairing information (Donâ€™t bond)
 //                  1 : Store pairing information (Bond)
 //
 // -----------------------------------------------------------------------------
-// btc pair #HEXaddr6Bytes# #INTflag#
+// btc pair #HEXaddr12Bytes# #INTflag#
 //    --- bluetooth classic functionality ---
-//    - Pair with device with address #HEXaddr6Bytes# and specify whether to bond
-//      with #INTflag# - 0 : Do not store pairing information (Don’t bond)
+//    - Pair with device with address #HEXaddr12Bytes# and specify whether to bond
+//      with #INTflag# - 0 : Do not store pairing information (Donâ€™t bond)
 //                       1 : Store pairing information (Bond)
 //                       2 : Use default as specified by 'btc savepairings'
 //
@@ -202,7 +187,7 @@
 //                           1 : Accept pair request
 //
 // -----------------------------------------------------------------------------
-// btc sendpin #INTpin# 
+// btc sendpin #INTpin#
 //    --- bluetooth classic functionality ---
 //    - Respond to a PIN request with #INTpin# during a pairing procedure
 //
@@ -232,6 +217,16 @@
 //******************************************************************************
         // Number of spp ports
 #define NUM_OF_SPP_PORTS                     8
+#define EBTCAUTHKEYTYPE_NONE                 0
+#define EBTCAUTHKEYTYPE_PASSKEY				 1
+#define EBTCAUTHKEYTYPE_OOB					 2
+#define EBTCAUTHKEYTYPE_PIN  				 3
+
+#define EBTCIOCAPABILITY_NONE                   0
+#define EBTCIOCAPABILITY_DISPLAY_YESNO          1
+#define EBTCIOCAPABILITY_KEYBOARD_ONLY          2
+#define EBTCIOCAPABILITY_DISPLAY_ONLY           3
+
 
 //******************************************************************************
 // Definitions
@@ -244,7 +239,7 @@
 //******************************************************************************
 // Global Variable Declarations
 //******************************************************************************
-dim hcSpp                   //handle of connection to use for SPP service
+dim hcSpp                   //handle of connection to use for VSP service
 dim hP[NUM_OF_SPP_PORTS+1]  //contains spp port handles
 dim prAddr$              //BT address of last device pairing requested from or initiated with
 
@@ -253,6 +248,19 @@ dim prAddr$              //BT address of last device pairing requested from or i
 //******************************************************************************
 // Function and Subroutine definitions
 //******************************************************************************
+
+function ZeroPadInt$(nLength, nInt)
+	dim PadString$, nExtend
+
+	sprint #PadString$, nInt
+	nExtend = nLength-strlen(PadString$)
+
+	while (nExtend > 0)
+		PadString$ = "0" + PadString$
+		nExtend = nExtend - 1
+	endwhile
+
+endfunc PadString$
 
 //==============================================================================
 //==============================================================================
@@ -327,9 +335,8 @@ endfunc 5
 
 
 //-------------------------------------------------------------------------
-//#CMD#//  spp open
-//#CMD#//  spp param #INTframesize# #INTincomingcredits#
-//#CMD#//  spp connect #HEXaddr6Bytes#
+//#CMD#//  spp open 
+//#CMD#//  spp connect #HEXaddr14Bytes#
 //#CMD#//  spp disconnect #INThConnSpp#
 //#CMD#//  spp close #INThSpp# 
 //#CMD#//  spp write #INThConnSpp# #STRdata#
@@ -350,16 +357,8 @@ function _spp()
             exitfunc rc
         endif
     
-    elseif strcmp(tkn$,"param")==0 then
-        //extract 2 : (framesize), (incomingcredits) and store starting at i[1]
-        rc = ExtractIntTokens(urtcmd$,1,2)
-        if rc != 0 then
-            exitfunc rc
-        endif
-        exitfunc BtcSppSetParams(i[0], i[1])
-
     elseif strcmp(tkn$,"connect")==0 then
-        //extract 1 : (addr6Bytes) and store starting at s$[1]
+        //extract 2 : (cfgID value) and store starting at i[1]
         rc = ExtractStrTokens(urtcmd$,1,1)
         if rc != 0 then
             exitfunc rc
@@ -380,9 +379,8 @@ function _spp()
         if rc != 0 then
             exitfunc rc
         endif
-        
-        rc=BtcSppClose(i[1])              //close the spp port. Remove handle from the array
 
+        rc=BtcSppClose(i[1])              //close the spp port. Remove handle in the array
         if rc==0 then
             print "\nSPP Port closed. Handle = "; i[1]
             RelPortHandle(i[1])           //release the port with the given handle
@@ -390,7 +388,7 @@ function _spp()
         else
             exitfunc rc
         endif
-        
+
     elseif strcmp(tkn$,"write")==0 then
         dim wLen
         rc = ExtractIntTokens(urtcmd$,1,1)
@@ -403,22 +401,22 @@ function _spp()
         // rc = ExtractStrTokens(urtcmd$,1,1)
         // if rc != 0 then
             // exitfunc rc
-        // endif        
+        // endif
+        
         exitfunc BtcSppWrite(hc[i[1]], urtcmd$, wLen)
-
     endif
 endfunc 5
 
 
 //-------------------------------------------------------------------------
 //#CMD#//  btc bond stats
-//#CMD#//  btc bond addkey #HEXaddr6Bytes# #HEXkey32Bytes# #INTkeyType#
-//#CMD#//  btc bond getkey #HEXaddr6Bytes#
-//#CMD#//  btc bond delkey #HEXaddr6Bytes#
+//#CMD#//  btc bond addkey #HEXaddr12Bytes# #HEXkey32Bytes# #INTkeyType#
+//#CMD#//  btc bond getkey #HEXaddr12Bytes#
+//#CMD#//  btc bond delkey #HEXaddr12Bytes#
 //#CMD#//  btc bond delall
 //#CMD#//  btc bond getfirst
 //#CMD#//  btc bond getnext
-//#CMD#//  btc bond persistkey #HEXaddr6Bytes#
+//#CMD#//  btc bond persistkey #HEXaddr12Bytes#
 //-------------------------------------------------------------------------
 function _btcbond()  
   tlen = ExtractStrToken(urtcmd$,tkn$)
@@ -431,7 +429,7 @@ function _btcbond()
     endif
     //=================================================
     if strcmp(tkn$,"addkey")==0 then
-      //#HEXaddr6Bytes#
+      //#HEXaddr12Bytes#
       tlen = ExtractStrToken(urtcmd$,tkn$)
       if tlen > 0 then
         s$[1]=StrDehexize$(tkn$)
@@ -456,7 +454,7 @@ function _btcbond()
     endif
     //=================================================
     if strcmp(tkn$,"getkey")==0 then
-      //#HEXaddr6Bytes#
+      //#HEXaddr12Bytes#
       tlen = ExtractStrToken(urtcmd$,tkn$)
       if tlen > 0 then
         s$[1]=StrDehexize$(tkn$)
@@ -474,7 +472,7 @@ function _btcbond()
     endif
     //=================================================
     if strcmp(tkn$,"delkey")==0 then
-      //#HEXaddr6Bytes#
+      //#HEXaddr12Bytes#
       tlen = ExtractStrToken(urtcmd$,tkn$)
       if tlen > 0 then
         s$[1]=StrDehexize$(tkn$)
@@ -510,7 +508,7 @@ function _btcbond()
     endif
     //=================================================
     if strcmp(tkn$,"persistkey")==0 then
-      //#HEXaddr6Bytes#
+      //#HEXaddr12Bytes#
       tlen = ExtractStrToken(urtcmd$,tkn$)
       if tlen > 0 then
         s$[1]=StrDehexize$(tkn$)
@@ -523,18 +521,28 @@ function _btcbond()
   endif
 endfunc 5
 
-
 //-------------------------------------------------------------------------
 //#CMD#//  btc getfriendlyname
 //#CMD#//  btc setfriendlyname #STRname#
+//#CMD#//  btc getclassofdevice
+//#CMD#//  btc setclassofdevice #INTCoD#
 //#CMD#//  btc sendpin #INTpin#
 //#CMD#//  btc savepairings #INTflag#
-//#CMD#//  btc pair #HEXaddr6Bytes# #INTflag#
+//#CMD#//  btc pair #HEXaddr12Bytes# #INTflag#
 //#CMD#//  btc pairresp #INTpairResp#
 //#CMD#//  btc discoveryconfig #INTcfgID# #INTval#
 //#CMD#//  btc setdiscoverable #INTenable# #INTtimeout#
 //#CMD#//  btc setpairable #INTenable#
 //#CMD#//  btc setconnectable #INTenable#
+//#CMD#//  btc passkey #INTval#
+//#CMD#//  btc setoob #STRhash# #STRrand#
+//#CMD#//  btc retrieveoob
+//#CMD#//  btc iocap #INTval#
+//#CMD#//  btc oobpref #INTval#
+//#CMD#//  btc oobavailable #INTval#
+//#CMD#//  btc justworks  #INTJWConf#
+
+
 //-------------------------------------------------------------------------
 function _btc() 
     tlen = ExtractStrToken(urtcmd$,tkn$)
@@ -563,6 +571,7 @@ function _btc()
         
         exitfunc BtcSetFriendlyName(s$[1])
     endif
+    
     
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     if strcmp(tkn$,"sendpin")==0 then
@@ -753,13 +762,25 @@ function HandlerSppConnTimOut() as integer
     DbgMsg( "\n --- SPP Conn Attempt Timeout" )
 endfunc 1
 
+//==============================================================================
+// Called when there is a pairing request from another device
+//==============================================================================
+function HandlerPairReq()
+    dim s$
+    rc=BtcGetPAIRRequestBDAddr(s$)
+    prAddr$ = s$
+    print "\nPair Req: "; StrHexize$(s$);pr$
+endfunc 1
+
 
 //==============================================================================
 // Called when an SPP disconnection occurs
 //==============================================================================
 function HandlerSppDiscon(hConn)
     dim hz
-    
+    if BRIDGESPPMODEON == 1 then
+	rc = streamunbridge(BridgeNumber)
+    endif
     hz = RelConnHandle(hConn)
     conns = conns - 1
     print "\n --- Spp Disconnect: handle=";hz
@@ -812,15 +833,14 @@ endfunc 1
 //==============================================================================
 function HandlerSppDataCmd()
     dim hPort, data$, rLen, hz
-
+    
     '//read and print data while there is data available to read
-	do
-		rc = BtcSppRead(hPort, data$, rLen)
-        if rLen>0 && rc ==0 then
+    while BtcSppRead(hPort, data$, rLen) == 0    
+        if rLen>0 then
             hz = GetConnHandle(hPort)
             print"\nPort Handle: ";hz; " Length: ";rLen;"\nData: ";data$;pr$
         endif
-	dowhile rLen>0 && rc ==0
+    endwhile
 endfunc 1
 
 
@@ -831,25 +851,19 @@ function HandlerSppData()
     dim hPort, data$, rLen
     
     '//read and print data while there is data available to read
-	do
-		rc = BtcSppRead(hPort, data$, rLen)
-        if rLen>0 && rc ==0 then
+    while BtcSppRead(hPort, data$, rLen) == 0    
+        if rLen>0 then
             print data$
         endif
-	dowhile rLen>0 && rc ==0
+    endwhile
 endfunc 1
 
-
 //==============================================================================
-// Called when there is a pairing request from another device
+// Called after a pairing attempt
 //==============================================================================
-function HandlerPairReq()
-    dim s$
-    rc=BtcGetPAIRRequestBDAddr(s$)
-    prAddr$ = s$
-    print "\nPair Req: "; StrHexize$(s$);pr$
+function HandlerPairRes(res)
+    print "\nPair Result: ";res; " "; StrHexize$(prAddr$);pr$
 endfunc 1
-
 
 //==============================================================================
 // Called on a pin request from another device
@@ -863,15 +877,6 @@ function HandlerPINReq()
         AssertResCode(rc,2273)
     endif
 endfunc 1
-
-
-//==============================================================================
-// Called after a pairing attempt
-//==============================================================================
-function HandlerPairRes(res)
-    print "\nPair Result: ";res; " "; StrHexize$(prAddr$);pr$
-endfunc 1
-
 
 //==============================================================================
 // Called when switching to command mode to register SPP event handler
