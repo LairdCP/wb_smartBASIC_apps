@@ -1,12 +1,6 @@
 '//******************************************************************************
 '// Laird Technologies (c) 2013
 '//
-'// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-'// +++++                                                                      ++
-'// +++++  When UwTerminal downloads the app it will store it as a filenname   ++
-'// +++++  which consists of all characters up to the first . and excluding it ++
-'// +++++                                                                      ++
-'// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 '//
 '// Health Thermometer Profile
 '//
@@ -28,7 +22,7 @@
 #define DEVICENAME_WRITABLE 1
 #define APPEARANCE          BLE_APPEARANCE_GENERIC_THERMOMETER
 #define MANF_NAME           "Laird Technologies"
-#define MODELSTR            "BT900"
+#define MODELSTR            "LAIRD WB"
 #define SERIALNUM           "12345"
 #define HWREV               "HwRev1.0"
 #define SWREV               "SwRev1.0"
@@ -92,7 +86,7 @@
 '//******************************************************************************
 '// Library Import
 '//******************************************************************************
-#include "lib\cli.health.thermometer.custom.sblib"
+#include "lib/cli.health.thermometer.custom.sblib"
 
 
 

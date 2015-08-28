@@ -1,16 +1,9 @@
 //******************************************************************************
 // Laird Technologies (c) 2014
 //
-// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-// +++++                                                                      ++
-// +++++  When UwTerminal downloads the app it will store it as a filenname   ++
-// +++++  which consists of all characters up to the first . and excluding it ++
-// +++++                                                                      ++
-// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-//
 // This library file provides rfcomm commands to be used by smartZ and should be
 // #included into the file 'smartZ.sb' if running on a dual mode module
-// e.g. BT900.
+// e.g. LAIRD WB.
 //
 //******************************************************************************
 // Function and Subroutine definitions

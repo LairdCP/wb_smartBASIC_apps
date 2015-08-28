@@ -2,12 +2,6 @@
 // Laird Technologies (c) 2014
 //
 //TODO: Isolate carrat checking thing into its own funcdtion so that you can use it across apps ieasily
-// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-// +++++                                                                      ++
-// +++++  When UwTerminal downloads the app it will store it as a filenname   ++
-// +++++  which consists of all characters up to the first . and excluding it ++
-// +++++                                                                      ++
-// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 //
 // This app provides for a command interface over the uart and the protocol is
 // as follows:-
@@ -236,21 +230,6 @@
 //    - server and the data is specified as a string
 //
 // -----------------------------------------------------------------------------
-// gattc writecmd #INTconnHandle# #INTattrHandle# #HEXdata#
-//    --- gatt client functionality ---
-//    - Use this command to write a new value into an attribute of a remote
-//    - server and the data is specified as hex digits which will be converted
-//    - to binary before transmission, without waiting for a response from the
-//    - GATT server
-//
-// -----------------------------------------------------------------------------
-// gattc writecmd$ #INTconnHandle# #INTattrHandle# #STRdata#
-//    --- gatt client functionality ---
-//    - Use this command to write a new value into an attribute of a remote
-//    - server and the data is specified as a string, without waiting for a
-//    - response from the GATT server
-//
-// -----------------------------------------------------------------------------
 // gatts attrmetadata #INTmdindex# #INTreadrights# #INTwriterights# #INTmaxdatalen# #INTvlen#
 //    --- gatt server functionality ---
 //    - calls BleAttrMetaData()
@@ -327,8 +306,7 @@
 // gatts service commit #INTstoreIndex#
 //    --- gatt server functionality ---
 //    - calls BleServiceCommit()
-//    - commit the service. In BL600 it is not required, BT900 it is
-//
+//    
 // -----------------------------------------------------------------------------
 // gatts service devinfo     
 //    --- gatt server functionality ---
@@ -365,10 +343,6 @@
 // misc s$ set #INTidx# #STRescapedvalue#
 //    - s$[#INTidx#] = #STRescapedvalue#
 //    - #INTidx# will be checked for valid index 
-//
-// -----------------------------------------------------------------------------
-// misc address
-//    - Outputs the modules bluetooth low energy address
 //
 // -----------------------------------------------------------------------------
 // uart set #INTnewspeed#
@@ -423,25 +397,11 @@
 //    - #INTconnHandle# sepecifies the connection handle
 //
 // -----------------------------------------------------------------------------
-// ble pair oobkey #INTconnHandle# #STRoobkey#
-//    - Security Manager related
-//    - This will result in BleSecMngrOOBkey() being called
-//TODO: comment
-//    - Valid value is 0 to 999999 for #INTpasscode# and 
-//    - #INTconnHandle# sepecifies the connection handle
-//
-// -----------------------------------------------------------------------------
 // ble pair bondreq #INTbondreq#
 //    - Security Manager related
 //    - This will result in BleSecMngrBondReq() being called
 //    - Enable or disable bonding when pairing
 //    - #INTbondreq# sepecifies whether to bond or not when pairing
-//
-// -----------------------------------------------------------------------------
-// ble pair oobpref #INTprefoob#
-//    - Security Manager related
-//    - This will result in BleSecMngrOOBPref() being called
-//    - Changes whether OOB pairing is preferred or not
 //
 // -----------------------------------------------------------------------------
 // ble bond stats
@@ -521,9 +481,6 @@
 //    - i[0] will contain the uuid handle as well
 //
 // -----------------------------------------------------------------------------
-//
-// For a list of BTC and SPP commands please refer to lib/cmd.btc.manager.sblib
-//
 //******************************************************************************
 
 //******************************************************************************
@@ -531,10 +488,7 @@
 //******************************************************************************
 
         //Set this to 0 to disable all debugging messages
-#define ENABLE_DEBUG_PRINTS                  1
-
-        //Set this to 1 to enable direct sB UART bridging (faster throughput)
-#define USE_BRIDGE                           1
+'#define ENABLE_DEBUG_PRINTS                  1
 
         // Number of connections
 #define NUM_OF_CONNS                         8
@@ -585,17 +539,20 @@
 #define CMD_MODE                                 0
 #define BRIDGE_VSP_MODE                          1
 #define BRIDGE_SPP_MODE                          2
-
+#define BRIDGE_SPP_MODE_C                        3
 //MISC
 #define CAR_PRESS_DELAY                     100          //ms to wait between registering entries of '^'
+
+dim BRIDGESPPMODEON : BRIDGESPPMODEON = 0 //Set to 1 when bridged via C bridge so it can be unbridged on disconnect
+dim BridgeNumber
 
 //******************************************************************************
 // Register Error Handler as early as possible
 //******************************************************************************
 sub HandlerOnErr()
-  if (ENABLE_DEBUG_PRINTS!=0) then
+'  if (ENABLE_DEBUG_PRINTS!=0) then
     print "\n OnErr - ";GetLastError();"\n"
-  endif
+'  endif
 endsub
 onerror next HandlerOnErr
 
@@ -606,34 +563,34 @@ onerror next HandlerOnErr
 //==============================================================================
 //==============================================================================
 sub AssertResCode(byval rc as integer,byval tag as integer)
-  if (ENABLE_DEBUG_PRINTS!=0) && (rc!=0) then
+'  if (ENABLE_DEBUG_PRINTS!=0) && (rc!=0) then
     print "\nFailed with ";integer.h' rc;" at tag ";tag
-  endif
+'  endif
 endsub
 
 //==============================================================================
 //==============================================================================
 sub DbgMsg(byval msg$ as string)
-  if (ENABLE_DEBUG_PRINTS!=0) then
+'  if (ENABLE_DEBUG_PRINTS!=0) then
     print "\n";msg$
-  endif
+'  endif
 endsub
 
 //==============================================================================
 //==============================================================================
 sub DbgMsgVal(byval msg$ as string, byval vl as integer)
-  if (ENABLE_DEBUG_PRINTS!=0) then
+'  if (ENABLE_DEBUG_PRINTS!=0) then
     print "\n";msg$;" ";vl
-  endif
+'  endif
 endsub
 
 //==============================================================================
 //==============================================================================
-sub DbgPrnAdvReport(byref rp$ as string)
-  if (ENABLE_DEBUG_PRINTS!=0) then
-    print "\nRpt=";strhexize$(rp$)
-  endif
-endsub
+'sub DbgPrnAdvReport(byref rp$ as string)
+'  if (ENABLE_DEBUG_PRINTS!=0) then
+'    print "\nRpt=";strhexize$(rp$)
+'  endif
+'endsub
 
 
 
@@ -648,7 +605,7 @@ endsub
 dim rc
 dim stRsp$ as string        //Uart rx data is stored here
 
-dim ok$,er$,pr$, uc$
+dim ok$,er$,pr$
 
 dim i[NUM_OF_I_PARAMS]      // index 0 used for return values
 dim s$[NUM_OF_S_PARAMS]    // must be at least 8 elements for BleSvcRegDevInfo()
@@ -668,7 +625,6 @@ dim vsplen                  //0 implies can send data. >0 waiting for notify eve
 dim vspRxH                  //handle of the RX char in the peripheral for VSP
 dim vspTxH                  //handle of the TX char in the peripheral for VSP
 dim carCnt                  //count variable for number of times '^' entered
-dim BridgeHandle            //handle of sB UART bridge
 
 //******************************************************************************
 // Initialisse Global Variable
@@ -677,7 +633,6 @@ dim BridgeHandle            //handle of sB UART bridge
 ok$    = "\nOK"
 er$    = "\nERROR "
 pr$    = "\r\n>"
-uc$    = "\nUNKNOWN COMMAND"
 
 gcState = 0 // gatt client is idle
 urts=0 //not suspended
@@ -686,7 +641,6 @@ hcVsp = -1
 vsplen = 0
 vspRxH = VSP_RX_CHAR_HANDLE
 vspTxH = VSP_TX_CHAR_HANDLE
-BridgeHandle = 0
 
 //******************************************************************************
 // Function and Subroutine definitions
@@ -695,21 +649,21 @@ BridgeHandle = 0
 
 //==============================================================================
 //==============================================================================
-function ClearS() 
-  dim j
-  for j = 0 to (NUM_OF_S_PARAMS-1)
-    s$[j]=""
-  next
-endfunc 0
+'function ClearS() 
+'  dim j
+'  for j = 0 to (NUM_OF_S_PARAMS-1)
+'    s$[j]=""
+'  next
+'endfunc 0
 
 //==============================================================================
 //==============================================================================
-function ClearI()
-  dim j
-  for j = 0 to (NUM_OF_I_PARAMS-1)
-    i[j]=0
-  next
-endfunc 0
+'function ClearI()
+'  dim j
+'  for j = 0 to (NUM_OF_I_PARAMS-1)
+'    i[j]=0
+'  next
+'endfunc 0
 
 //==============================================================================
 //release all connection handles
@@ -763,8 +717,6 @@ sub UartRsp(rsp as integer)
         print ok$;pr$
     elseif rsp == -2 then
         print pr$
-    elseif rsp == -4 then
-        print uc$;pr$
     elseif rsp > 0 then 
         print er$;integer.h' rsp;pr$
     endif
@@ -857,7 +809,7 @@ endfunc 0
 //** #include the correct library file for the smartBASIC module being used 
 //------------------------------------------------------------------------------
 // #include "lib\cmd.ble.def.sblib"            //comment out line below and uncomment this line if running on a single mode (BLE) module
-#include "lib\cmd.btc.manager.sblib"     //comment out line above and uncomment this line if running on a dual mode (BLE & BT Classic) module
+#include "lib/cmd.btc.manager.sblib"     //comment out line above and uncomment this line if running on a dual mode (BLE & BT Classic) module
 
 //-------------------------------------------------------------------------
 //#CMD#// txpower = #INTdbm#       - set tx power to #INTdbm#
@@ -1169,8 +1121,6 @@ endfunc 5
 //#CMD#//  gattc read #INTconnHandle# #INTattrHandle# #INToffset#
 //#CMD#//  gattc write #INTconnHandle# #INTattrHandle# #HEXdata#
 //#CMD#//  gattc write$ #INTconnHandle# #INTattrHandle# #STRdata#
-//#CMD#//  gattc writecmd #INTconnHandle# #INTattrHandle# #HEXdata#
-//#CMD#//  gattc writecmd$ #INTconnHandle# #INTattrHandle# #STRdata#
 //-------------------------------------------------------------------------
 function _Gattc()  
   dim cmdid
@@ -1610,10 +1560,8 @@ endfunc 5
 //#CMD#//  ble pair iocap      #INTiocap#
 //#CMD#//  ble pair justworks  #INTJWConf#
 //#CMD#//  ble pair passkey    #INTconnHandle# #INTpasscode#
-//#CMD#//  ble pair oobkey     #INTconnHandle# #STRoobcode#
 //#CMD#//  ble pair bondreq    #INTbondreq#
 //#CMD#/   ble pair accept     #INTconnHandle# #INTaccept#
-//#CMD#/   ble pair oobpref    #INTprefoob#
 //#CMD#//  ble pair            #INTconnHandle# #INTenablebonding#
 //-------------------------------------------------------------------------
 function _BlePair()
@@ -1663,24 +1611,6 @@ function _BlePair()
     endif 
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    if strcmp(tkn$,"oobkey")==0 then
-        //extract 1 (#INTconnHandle#) and store starting at i[1]
-        rc = ExtractIntTokens(urtcmd$,1,1)
-        if rc != 0 then
-            exitfunc rc
-        endif
-        //extract 1 (#STRoobkey#) and store starting at s$[1]
-        tlen = ExtractStrToken(urtcmd$,s$[1])
-        if tlen<1  then
-          exitfunc 5
-        endif
-print "\ncode is [";s$[1];"]\n"
-        s$[1] = StrDehexize$(s$[1])
-print "\ncode hex [";s$[1];"]\n"
-        exitfunc BleSecMngrOOBKey(hc[i[1]],s$[1])
-    endif 
-
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     if strcmp(tkn$,"bondreq")==0 then
         //extract 1 (#INTbondreq#) and store starting at i[1]
         rc = ExtractIntTokens(urtcmd$,1,1)
@@ -1698,17 +1628,6 @@ print "\ncode hex [";s$[1];"]\n"
             exitfunc rc
         endif
         exitfunc BleAcceptPairing(hc[i[1]],i[2])
-    endif
-
-    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    if strcmp(tkn$,"oobpref")==0 then
-        //extract 1 (#INTprefoob#) and store starting at i[1]
-        rc = ExtractIntTokens(urtcmd$,1,1)
-        if rc != 0 then
-            exitfunc rc
-        endif
-        exitfunc BLESECMNGROOBPREF(i[1])
-
     endif
     
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1749,12 +1668,16 @@ endfunc 5
 // #CMD#//  ble bond getinfo #INTindex#
 // #CMD#//  ble bond erasekey #HEXaddr7Bytes#
 // #CMD#//  ble bond eraseall
+// #CMD#//  ble bond advinfo #HEXaddr7Bytes#
+// #CMD#//  ble bond add #HEXaddr7Bytes# #HEXslave_ediv+rand_ltk+ltksz27Bytes# #HEXmaster_ediv+rand_ltk+ltksz27Bytes# #INTmitm# #HEXIRK16Bytes# #HEXCRSK16Bytes#
 // -------------------------------------------------------------------------
-function _BleBond() 
+function _BleBond()
     tlen = ExtractStrToken(urtcmd$,tkn$)
     if tlen == 0 then
         exitfunc 5
     endif
+
+        dim S1$, S2$, S3$
     
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     if strcmp(tkn$,"stats")==0 then
@@ -1784,7 +1707,7 @@ function _BleBond()
             exitfunc rc
         endif
         print "\n(";i[2];"): ";StrHexize$(s$[1]);" : ";integer.h'i[2]
-        exitfunc 0            
+        exitfunc 0
     
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     elseif strcmp(tkn$,"erasekey")==0 then
@@ -1798,10 +1721,10 @@ function _BleBond()
             exitfunc 5
         endif
         exitfunc BleBondingEraseKey(s$[1])
-        
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     elseif strcmp(tkn$,"eraseall")==0 then
         exitfunc BleBondingEraseAll()
+
     endif
 endfunc 5
 
@@ -1838,7 +1761,6 @@ endfunc 5
 //#CMD#//  misc s$ set #INTidx# #STRescapedvalue#
 //#CMD#//  misc i  clearall
 //#CMD#//  misc i  set #INTidx# #INTval#
-//#CMD#//  misc address
 //-------------------------------------------------------------------------
 function _Misc()  
   tlen = ExtractStrToken(urtcmd$,tkn$)
@@ -1852,9 +1774,9 @@ function _Misc()
       exitfunc 5
     endif
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    if strcmp(tkn$,"clearall")==0 then
-      exitfunc ClearS()
-    endif  
+'    if strcmp(tkn$,"clearall")==0 then
+'      exitfunc ClearS()
+'    endif  
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     if strcmp(tkn$,"set")==0 then
       //extract 1 (#INTidx#) and store starting at i[1]
@@ -1881,9 +1803,9 @@ function _Misc()
       exitfunc 5
     endif
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    if strcmp(tkn$,"clearall")==0 then
-      exitfunc ClearI()
-    endif  
+'    if strcmp(tkn$,"clearall")==0 then
+'      exitfunc ClearI()
+'    endif  
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     if strcmp(tkn$,"set")==0 then
       dim idx
@@ -1900,13 +1822,6 @@ function _Misc()
       endif
       exitfunc 0
     endif  
-  endif
-  //=================================================
-  if strcmp(tkn$,"address")==0 then
-    dim Tmp$ : Tmp$ = sysinfo$(4)
-    Tmp$ = strhexize$(Tmp$)
-    print "BLE Address: ";Tmp$;"\n"
-    exitfunc -2
   endif
 endfunc 5
 
@@ -1937,27 +1852,36 @@ endfunc 5
 
 
 //-------------------------------------------------------------------------
-//#CMD#// bridge vsp
-//#CMD#// bridge spp
+//#CMD#//  bridge vsp
+//#CMD#//  bridge spp
 //-------------------------------------------------------------------------
 function _bridge()
-tlen = ExtractStrToken(urtcmd$,tkn$)
-if tlen == 0 then
-exitfunc 5
-endif
-//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-if strcmp(tkn$,"vsp")==0 then
-rc=SendMsgApp(0,BRIDGE_VSP_MODE)
-exitfunc -1 //give no response to user
-endif
-//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-if strcmp(tkn$,"spp")==0 then
-rc=SendMsgApp(0,BRIDGE_SPP_MODE)
-exitfunc -1
-endif
+    tlen = ExtractStrToken(urtcmd$,tkn$)
+    if tlen == 0 then
+        exitfunc 5
+    endif
+    
+    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    if strcmp(tkn$,"vsp")==0 then
+        rc=SendMsgApp(0,BRIDGE_VSP_MODE)
+        exitfunc -1     //give no response to user
+    endif
+    
+    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    if strcmp(tkn$,"spp")==0 then
+        rc=SendMsgApp(0,BRIDGE_SPP_MODE)
+        exitfunc -1
+    endif    
+
+    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    if strcmp(tkn$,"sppc")==0 then
+BRIDGESPPMODEON = 1
+        rc=SendMsgApp(0,BRIDGE_SPP_MODE_C)
+        exitfunc -1
+    endif    
 endfunc 5
 
-
+        
 //==============================================================================
 //==============================================================================
 function OnUartCmd() as integer
@@ -1997,12 +1921,13 @@ function OnUartCmd() as integer
 
     elseif strcmp(tkn$,"uart")==0 then
       rc = _Uart()
-      
+
     elseif strcmp(tkn$,"inquiry")==0 then
       rc = _inquiry()
       
     elseif strcmp(tkn$,"spp")==0 then
       rc = _spp()
+	  
       
     elseif strcmp(tkn$,"btc")==0 then
       rc = _btc()
@@ -2012,9 +1937,7 @@ function OnUartCmd() as integer
       
     elseif strcmp(tkn$,"exit")==0 || strcmp(tkn$,"quit")==0  then
       exitfunc 0
-    
-    else
-        rc=-4 //send an "UNKNOWN COMMAND" response to user
+      
     
     endif
   endif
@@ -2037,31 +1960,15 @@ function HandlerUartRxCmd() as integer
     exitfunc 1
   endif
 
-  //check if CR has been received
-  nMatch=UartReadMatch(stRsp$,13)
+  //check if NL has been received
+  nMatch=UartReadMatch(stRsp$,10)
   if nMatch!=0 then
-    //CR exists in the input buffer
+    //NL exists in the input buffer
     urtcmd$ = strsplitleft$(stRsp$,nMatch)
     exitfunc OnUartCmd()
   endif
 endfunc 1
 
-//* Changed controlling mode via DTR to submitting "ato" and "^^^" because controlling via DTR is not supported on the BT900
-//==============================================================================
-// This handler is called when data has arrived at the serial port
-//==============================================================================
-// function HandlerUartRxVsp() as integer
-  // just write to the VSP service
-  // if vsplen==0 then
-    // vsplen  = UartReadN(vdta$, VSP_MAX_CHARDATA_LEN )
-    // if vsplen > 0 then
-      // can send to the VSP service in the peripheral
-      // rc=BleGattcWriteCmd(hcVsp,vspRxH,vdta$)
-      // print vdta$      
-      // vdta$=""
-    // endif
-  // endif
-// endfunc 1
 
 //==============================================================================
 //This handler is called when data has arrived at the serial port (transparent)
@@ -2320,7 +2227,7 @@ endfunc 1
 //==============================================================================
 function HandlerAttrRead(hConn,hAttr,nSts) as integer
   dim a$,ofst  
-  print "\nEVATTRREAD(hConn=";hConn;",handle=";hAttr;",status=";nSts;")"
+  print "\nEVATTRREAD(hConn=";integer.h' hConn;",handle=";hAttr;",status=";nSts;")"
   if nSts == 0 then
     rc = BleGattcReadData(hConn,hAttr,ofst,a$)
     if rc==0 then
@@ -2419,27 +2326,6 @@ function HandlerNotifyBufVsp() as integer
   vsplen=0
 endfunc HandlerUartRxVsp()
 
-
-'//==============================================================================
-'// Called when the state of sio28 changes. Connected to DTR output of PC
-'//==============================================================================
-function HandlerSio28() as integer
-  if GpioRead(28) then
-    //DTR Deasserted so NOT command mode
-    if conns>0 then
-      OnEvent  EVUARTRX       call HandlerUartRxVsp
-      Onevent  EVNOTIFYBUF    call HandlerNotifyBufVsp
-      OnEvent  EVATTRNOTIFY   call HandlerAttrNtfyVsp
-    endif
-  else
-    //DTR Deasserted so command mode
-    OnEvent  EVUARTRX       call HandlerUartRxCmd
-    Onevent  EVNOTIFYBUF    call HandlerNotifyBufCmd
-    OnEvent  EVATTRNOTIFY   call HandlerAttrNtfyCmd
-  endif
-endfunc 1
-
-//* Using this instead of HandlerSio28 to switch modes
 '//==============================================================================
 '// Called after SendMsgApp is called. Used to switch between command and bridge mode
 '//==============================================================================
@@ -2455,12 +2341,6 @@ function SetMode(msgID, cmd) as integer
         
     elseif cmd==CMD_MODE then
         OnSetModeCmd()      //let sblib handle it first
-        IF USE_BRIDGE == 1 THEN
-            IF BridgeHandle != 0 THEN
-//                rc = STREAMUNBRIDGE(BridgeHandle)
-                BridgeHandle = 0
-            ENDIF
-        ENDIF
         //DTR Deasserted so command mode
         OnEvent  EVUARTRX       call HandlerUartRxCmd
         Onevent  EVNOTIFYBUF    call HandlerNotifyBufCmd
@@ -2470,17 +2350,19 @@ function SetMode(msgID, cmd) as integer
 
     elseif cmd==BRIDGE_SPP_MODE then
         if conns>0 then
-            IF USE_BRIDGE == 1 THEN
-                dim Hndl1, Hndl2
-                rc = STREAMGETUARTHANDLE(Hndl1)
-                rc = STREAMGETSPPHANDLE(hcSpp, Hndl2)
-                rc = StreamBridge(Hndl1, Hndl2, BridgeHandle)
-            ELSE
-                OnSetModeSpp()      //let sblib handle it first
-                OnEvent  EVUARTRX                call HandlerUartRxSpp
-                Onevent  EVNOTIFYBUF             call HandlerNotifyBufCmd
-                OnEvent  EVATTRNOTIFY            call HandlerAttrNtfyCmd
-            ENDIF
+            OnSetModeSpp()      //let sblib handle it first
+            OnEvent  EVUARTRX                call HandlerUartRxSpp
+            Onevent  EVNOTIFYBUF             call HandlerNotifyBufCmd
+            OnEvent  EVATTRNOTIFY            call HandlerAttrNtfyCmd
+            print ok$
+        endif
+
+    elseif cmd==BRIDGE_SPP_MODE_C then
+        if conns>0 then
+	    dim uartStream, sppStream
+	    rc = StreamGetUartHandle(uartStream)
+	    rc = StreamGetSPPHandle(hcSpp, sppStream)
+	    rc = StreamBridge(uartStream, sppStream, BridgeNumber)
             print ok$
         endif
     endif
@@ -2520,9 +2402,6 @@ OnEvent  EVCHARCCCD               call HandlerCharCccd
 OnEvent  EVCHARSCCD               call HandlerCharSccd
 OnEvent  EVCHARDESC               call HandlerCharDesc
 
-
-
-// OnEvent  EVGPIOCHAN0              call HandlerSio28
 OnEvent  EVMSGAPP                 call SetMode
 
 //------------------------------------------------------------------------------
@@ -2535,20 +2414,6 @@ sub Initialise()
   InitConnHandles()
 endsub
 
-//==============================================================================
-//==============================================================================
-// sub Startup()
-    // dim devNme$ : devNme$ = SysInfo$(0)
-    // Ensure we can detect changes in nAutorun (SIO28)
-    // if StrCmp(devNme$, "Laird BT900") then
-        // rc=GpioBindEvent(0,4,2)         //DTR -> SIO 4 on BT900
-        // AssertResCode(rc,2407)
-    // elseif StrCmp(devNme$, "Laird BL600") || StrCmp(devNme$, "Laird BL620") then
-        // rc=GpioBindEvent(0,28,2)        //DTR -> SIO 28 on BL6XX
-        // AssertResCode(rc,2410)
-    // endif
-// endsub
-
 
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
@@ -2556,10 +2421,7 @@ Initialise()
 // Startup()
 
 //Send user prompt for uart based command interface
-dim Tmp$ : Tmp$ = sysinfo$(4)
-Tmp$ = strhexize$(Tmp$)
-print "\n\r";BleGetDeviceName$();" - ";Tmp$;"\n\r\n\r"
-Tmp$ = ""
+print "\n\r";BleGetDeviceName$();"\n\r"
 //Send an OK response
 UartRsp(0)
 

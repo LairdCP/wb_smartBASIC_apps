@@ -1,13 +1,6 @@
 '//******************************************************************************
 '// Laird Technologies (c) 2013
 '//
-'// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-'// +++++                                                                      ++
-'// +++++  When UwTerminal downloads the app it will store it as a filenname   ++
-'// +++++  which consists of all characters up to the first . and excluding it ++
-'// +++++                                                                      ++
-'// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-'//
 '// Proximity Profile
 '//
 '//   ####################################
@@ -85,24 +78,24 @@ onerror next HandlerOnErr
 '//******************************************************************************
 '// Library Import
 '//******************************************************************************
-#include "lib\debugging.routines.sblib"
-#include "lib\ble.sblib"
+#include "lib/debugging.routines.sblib"
+#include "lib/ble.sblib"
 
-#include "lib\fast.slow.advert.mngr.sblib"
-#include "lib\advert.report.manager.sblib"
+#include "lib/fast.slow.advert.mngr.sblib"
+#include "lib/advert.report.manager.sblib"
 
-#include "lib\connection.manager.sblib"
-#include "lib\security.manager.sblib"
-#include "lib\gap.service.sblib"
-#include "lib\device.information.service.sblib"
+#include "lib/connection.manager.sblib"
+#include "lib/security.manager.sblib"
+#include "lib/gap.service.sblib"
+#include "lib/device.information.service.sblib"
 
 //Comment following line to remove battery service
-#include "lib\custom.battery.service.sblib"
+#include "lib/custom.battery.service.sblib"
 
 //Add services as appropriate
-#include "lib\custom.immediate.alert.service.sblib"
-#include "lib\custom.link.loss.service.sblib"
-#include "lib\custom.tx.power.service.sblib"
+#include "lib/custom.immediate.alert.service.sblib"
+#include "lib/custom.link.loss.service.sblib"
+#include "lib/custom.tx.power.service.sblib"
 
 '//******************************************************************************
 '// Debugging resource after libs
@@ -298,7 +291,7 @@ function OnUartCmd(stData$,datalen) as integer
 
   if datalen >= 4 then
 
-    '//drop the terminating CR
+    '//drop the terminating NL
     datalen = datalen - 1
     stData$ = left$(stData$,datalen)
     //extract the command
@@ -543,7 +536,7 @@ function HandlerUartRx() as integer
   dim nMatch
   dim stData$
 
-  nMatch=UartReadMatch(stRsp$,13)
+  nMatch=UartReadMatch(stRsp$,10)
   if nMatch!=0 then
     stData$ = strsplitleft$(stRsp$,nMatch)
     exitfunc OnUartCmd(stData$,nMatch)

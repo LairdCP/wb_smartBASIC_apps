@@ -18,36 +18,36 @@
 '//   #                                                                                 #
 '//   #  -----------------------------------------------------------------------------  #
 '//   #  ::Changelog:: 06/12/13 -> 2.1.0                                                #
-'//   #  -----------------------------------------------------------------------------  
+'//   #  -----------------------------------------------------------------------------  # 
 '//   #  - Refactored so that it is split in two files                                  #
-'//   #                                                                                 
+'//   #                                                                                 #                     
 '//   #  -----------------------------------------------------------------------------  #
 '//   #  ::Changelog:: 05/12/13 -> 2.1.0                                                #
-'//   #  -----------------------------------------------------------------------------  
+'//   #  -----------------------------------------------------------------------------  # 
 '//   #  - Refactored so that using #define HANDLERCHARVAL this app will work in all    #
 '//   #    firmware versions                                                            #
 '//   #  - Changed default transmit power to +4dBm                                      #
 '//   #  - removed SWREV #defined and using APP_VERSION instead                         #
-'//   #                                                                                 
+'//   #                                                                                 #                     
 '//   #  -----------------------------------------------------------------------------  #
 '//   #  ::Changelog:: 03/12/13 -> 2.0.0                                                #
-'//   #  -----------------------------------------------------------------------------  
-'//   #  - Removed BleAdvertStop() from HndlrBleAdvTmt() - redundant                    
+'//   #  -----------------------------------------------------------------------------  # 
+'//   #  - Removed BleAdvertStop() from HndlrBleAdvTmt() - redundant                    #                             
 '//   #  - Validating advIntvl in HndlrCharVal() now instead of in StartAdvertising()   #
-'//   #                                                                                 
+'//   #                                                                                 #                     
 '//   #  -----------------------------------------------------------------------------  #
 '//   #  ::Changelog:: 02/12/13 -> 2.0.0                                                #
-'//   #  -----------------------------------------------------------------------------  
+'//   #  -----------------------------------------------------------------------------  # 
 '//   #  - Added ability to change device name via extra char and save it to memory     #
 '//   #  --- Changed char UUIDs to accommodate new char                                 #
 '//   #  --- Removed global variable 'dn$'                                              #
-'//   #  --- GAP Device Name will mirror custom Device Name char                        #
+'//   #  --- GAP Device Name will mirror custom Device Name char                        #                                     
 '//   #                                                                                 #
 '//   #  - Rewrote HndlrCharVal() with a case statement                                 #
 '//   #                                                                                 #
 '//   #  -----------------------------------------------------------------------------  #
 '//   #  ::Changelog:: 29/11/13                                                         #
-'//   #  -----------------------------------------------------------------------------  #
+'//   #  -----------------------------------------------------------------------------  # 
 '//   #  - Added UUIDs to description below                                             #
 '//   #  - Changed HWREV define to "1.0"                                                #
 '//   #  - Changed Major and Minor defines                                              #
@@ -75,20 +75,20 @@
 '//
 '//   #######################################################################################
 '//   #                                                                                     #
-'//   #  This sample app turns the BL600 into an iBeacon by creating and advertising with   #
+'//   #  This sample app turns the LAIRD WB into an iBeacon by creating and advertising with#
 '//   #  an Advertising Record (AD) that can be used by a receiving device for the intended #
 '//   #  use case.                                                                          #
 '//   #                                                                                     #
-'//   #  The receiver can connect to the BL600 to change the iBeacon data and some of the   #
+'//   #  The receiver can connect to the LAIRD WB to change the iBeacon data and some of the#
 '//   #  advertising parameters via the characteristics described below.                    #
 '//   #                                                                                     #
 '//   #                                                                                     #
 '//   #  ---------------------------------------------------------------------------------  #
 '//   #  ::Characteristics::                                                                #
 '//   #  ---------------------------------------------------------------------------------  #
-'//   #                                                                                     #
+'//   #                                                                                     # 
 '//   #  [Device Name]:                                569a2010-b87f-490c-92cb-11ba5ea5167c #
-'//   #      - BL600's Device name as seen by other devices                                 #
+'//   #      - LAIRD WB's Device name as seen by other devices                              #
 '//   #                                                                                     #
 '//   #  [AD Format]:                                  569a2011-b87f-490c-92cb-11ba5ea5167c #
 '//   #      - Specifies the format of the Advertising Record (AD)                          #
@@ -100,7 +100,7 @@
 '//   #                                                                                     #
 '//   #  [iBeacon UUID]:                               569a2012-b87f-490c-92cb-11ba5ea5167c #
 '//   #     - Uniquely defines iBeacon type or company                                      #
-'//   #     - Length: 16 bytes                                                              #
+'//   #     - Length: 16 bytes                                                              # 
 '//   #                                                                                     #
 '//   #  [Major Value]:                                569a2013-b87f-490c-92cb-11ba5ea5167c #
 '//   #     - Differentiates iBeacons with the same UUID                                    #
@@ -114,8 +114,8 @@
 '//   #     - Transmitting Power - Adopted Characteristic                                   #
 '//   #     - Length: 1 byte                                                                #
 '//   #     - Unit: dBm (signed 8 bit)                                                      #
-'//   #     - Valid values:  -20, -16, -12, -8, -4, 0, 4, 8                                 #
-'//   #          hex values-  EC   F0   F4  F8  FC  0  4  8                                 #
+'//   #     - Valid values: -20, -16, -12, -8, -4, 0, 4, 8                                  #
+'//   #          hex values- EC   F0   F4   F8  FC 0  4  8                                  #
 '//   #                                                                                     #
 '//   #  [Advertising Interval]:                       569a2015-b87f-490c-92cb-11ba5ea5167c #
 '//   #     - Time between two advertisement events                                         #
@@ -129,13 +129,13 @@
 '//   #     - Unit:  minutes (e.g. 10 will give 600000ms)                                   #
 '//   #                                                                                     #
 '//   #  [Calibrated RSSI Value]:                      569a2017-b87f-490c-92cb-11ba5ea5167c #
-'//   #     - RSSI measured 1m from BL600 when Tx Power = 4 dBm                             #
+'//   #     - RSSI measured 1m from LAIRD WB when Tx Power = 4 dBm                          #
 '//   #     - Length: 1 byte (signed 8 bit)                                                 #
 '//   #     - Unit:  dBm   (eg -128 = 0x80 -60==0xC4 -1==0xFF )                             #
 '//   #                                                                                     #
 '//   #  [Remain Connectible Time]:                    569a2018-b87f-490c-92cb-11ba5ea5167c #
 '//   #     - Time to advertise with type 0 (connectible)                                   #
-'//   #     - Length: 1 byte (unsigned 8 bit)                                                 #
+'//   #     - Length: 1 byte (signed 8 bit)                                                 #
 '//   #     - Unit:  seconds (e.g. 10 will give 10000ms)                                    #
 '//   #     - Valid values: 1-255                                                           #
 '//   #                                                                                     #
@@ -171,11 +171,11 @@
 '//   #                                                                                     #
 '//   #  ::Android::                                                                        #
 '//   #  With the app "nRF Master Control Panel", you can view the AD by tapping "iBeacon"  #
-'//   #  when it appears in the device list. You connect to the BL600 to change             #
+'//   #  when it appears in the device list. You connect to the LAIRD WB to change          #
 '//   #  characteristic values by tapping the "Connect" button. (See Examples below)        #
 '//   #                                                                                     #
 '//   #  ::iOS::                                                                            #
-'//   #  With the app "LightBlue", you can connect to the BL600 to change characteristic    #
+'//   #  With the app "LightBlue", you can connect to the LAIRD WB to change characteristic #
 '//   #  values by tapping "iBeacon" when it appears under "Scanning for Peripherals...".   #
 '//   #  (See Examples below)                                                               #
 '//   #                                                                                     #
@@ -183,27 +183,22 @@
 '//   #  [Test iBeacon Functionality]                                                       #
 '//   #                                                                                     #
 '//   #  When advertising, the app "iBeacon Locate" on Android and its iOS equivalent,      #
-'//   #  "Locate for iBeacon" will identify the BL600 as an iBeacon and display it's UUID,  #
+'//   #  "Locate for iBeacon" will identify the LAIRD WB as an iBeacon and display it's UUID,#
 '//   #  major and minor values, the RSSI and an approximate distance from the iBeacon.     #
 '//   #                                                                                     #
 '//   #  Tapping on the device under "Visible iBeacons" will allow you to calibrate it for  #
 '//   #  this app to give you a more accurate reading of the distance.                      #
 '//   #                                                                                     #
-'//   #  It is recommended that you calibrate the BL600 as well by setting the TxPower      #
+'//   #  It is recommended that you calibrate the LAIRD WB as well by setting the TxPower   #
 '//   #  characteristic value to 4 dBm and measuring the RSSI on another device that is     #
 '//   #  1 metre away. Update the Calibrated RSSI Value char with this measured RSSI        #
 '//   #                                                                                     #
-'//   #  ::Note:: - This Android app recognises iBeacons with any one of the following      #
+'//   #  ::Note:: - This Android/iOS app recognises iBeacons with any one of the following  #
 '//   #             Apple defined UUIDs:                                                    #
 '//   #                                                                                     #
 '//   #             e2c56db5-dffb-48d2-b060-d0f5a71096e0                                    #
 '//   #             5a4bcfce-174e-4bac-a814-092e77f6b7e5                                    #
 '//   #             74278bda-b644-4520-8f0c-720eaf059935                                    #
-'//   #                                                                                     #
-'//   #  ::Note:: - This iOS app recognises iBeacons will only work with the following ID   #
-'//   #             since iOS version 8:                                                    #
-'//   #                                                                                     #
-'//   #             e2c56db5-dffb-48d2-b060-d0f5a71096e0                                    #
 '//   #                                                                                     #
 '//   #           - The custom Device Name characteristic must be used to change the        #
 '//   #             device name and NOT the one in the GAP service                          #
@@ -224,7 +219,7 @@
 '//   #   3. Select the Tx Power characteristic (569a2013-b87f-490c-92cb-11ba5ea5167c)      #
 '//   #   4. Write HEX value 0xCE                                                           #
 '//   #   5. Disconnect from the iBeacon                                                    #
-'//   #   6. BL600 will now advertise with Tx power of -50                                  #
+'//   #   6. LAIRD WB will now advertise with Tx power of -50                               #
 '//   #                                                                                     #
 '//   #                                                                                     #
 '//   #######################################################################################
@@ -341,11 +336,12 @@ dtaLen[FORMAT_INDEX]=1
 dtaLen[UUID_INDEX]=16
 dtaLen[MAJOR_INDEX]=2
 dtaLen[MINOR_INDEX]=2
-dtaLen[TXPOWER_INDEX]=1
+dtaLen[TXPOWER_INDEX]=1     
 dtaLen[ADV_INTVL_INDEX]=1
 dtaLen[ADV_TMT_INDEX]=1
 dtaLen[CAL_VAL_INDEX]=1
 dtaLen[REM_CONN_TME_INDEX]=1
+
 
 
 '//******************************************************************************
@@ -382,20 +378,20 @@ EndFunc -1                             //at this point, whole array has been sea
 '//------------------------------------------------------------------------------
 Function ValidateTxPwr(tp$)
     '//Array of valid tx power values
-    dim txp[8],tp  
-    txp[0]=8 : txp[1]=4 : txp[2]=0 : txp[3]=-4 : txp[4]=-8: txp[5]=-12: txp[6]=-16: txp[7]=-20
+    dim txp[9],tp  
+    txp[0]=4 : txp[1]=0 : txp[2]=-4 : txp[3]=-8 : txp[4]=-12: txp[5]=-16: txp[6]=-20: txp[7]=-30: txp[8]=-55
     
     '//Convert tx power to integer
     rc=BleDecodeS8(tp$,tp,0)
     
     dim i
-    for i = 0 to 7
+    for i = 0 to 8
         '//Take given TxPower and return the nearest valid TxPower value
         if tp >=txp[i] then
             ExitFunc txp[i]
         endif
     next
-Endfunc txp[7]   //just return minimum power
+Endfunc txp[8]   //just return minimum power
 
 
 '//------------------------------------------------------------------------------
@@ -682,7 +678,7 @@ EndSub
 '// Error handler
 '//------------------------------------------------------------------------------
 Sub HndlrErr()
-    '//Reset the module
+    '//Reset the smartBASIC
     reset(0)
 EndSub
     

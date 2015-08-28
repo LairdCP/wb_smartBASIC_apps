@@ -1,22 +1,14 @@
 //******************************************************************************
 // Laird Technologies (c) 2014
 //
-// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-// +++++                                                                      ++
-// +++++  When UwTerminal downloads the app it will store it as a filenname   ++
-// +++++  which consists of all characters up to the first . and excluding it ++
-// +++++                                                                      ++
-// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-//
-//
 //	smartZ
 //
 //
-//	This app provides for a command line interface to the BT900 devkit over the UART. 
+//	This app provides for a command line interface to the LAIRD WB devkit over the console.
 //	The commands are designed to mimic the behaviour of BlueZ commands used in Linux.
 //
 //	When you run the app you will get a -------> command prompt to allow you to submit
-//	commands as follows:- 
+//	commands as follows:-
 //
 //
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -115,7 +107,8 @@
 // APP RUN MODES
 #define NORMAL_MODE                                 	0
 #define RFCOMM_MODE                          			1
-#define GATTTOOL_LISTEN									2
+#define GATTTOOL_LISTEN_MODE							2
+#define LEGACY_PIN_MODE									3
 
 //******************************************************************************
 // Global Variable Declarations
@@ -151,7 +144,7 @@ dim inqmode	: inqmode = 2		// Inquiry Mode: 0 for Standard, 1 for with RSSI, 2 f
 dim inqtpl : inqtpl=4			// Inquiry transmit power level
 dim letpl : letpl = 4			// LE Tx Power level in dBm
 dim mjVersion : mjVersion=1		// Major version number
-dim mnVersion : mnVersion=4		// Minor version number
+dim mnVersion : mnVersion=6		// Minor version number
 
 
 // globale variables used for gatttool command
@@ -242,12 +235,12 @@ endfunc 0
 //==============================================================================
 
 //------------------------------------------------------------------------------
-//** #include the correct library file for the smartBASIC module being used 
+//** #include the correct library file for the module being used
 //------------------------------------------------------------------------------
-#include "lib\smartZ.hcitool.sblib"
-#include "lib\smartZ.gatttool.sblib"
-#include "lib\smartZ.rfcomm.sblib"
-#include "lib\smartZ.hciconfig.sblib"
+#include "lib/smartZ.hcitool.sblib"
+#include "lib/smartZ.gatttool.sblib"
+#include "lib/smartZ.rfcomm.sblib"
+#include "lib/smartZ.hciconfig.sblib"
 
 //==============================================================================
 // Initialise the Bluetooth device
@@ -290,6 +283,7 @@ sub InitBtDevice()
 	rc = btcSppOpen(nHandle)
 
 endsub
+
 //==============================================================================
 // This is the first subroutine called when the program starts
 //==============================================================================
@@ -310,13 +304,13 @@ sub Initialise()
 	print pr$
 
 endsub
+
 //==============================================================================
 // Display the Help menu
 //==============================================================================
 sub _help()
 
 	print "Available Commands: \n\n"
-	print "	help\n"
 	print "	hcitool\n"
 	print "	gatttool\n"
 	print "	rfcomm\n"
@@ -327,6 +321,7 @@ sub _help()
 	print "<command> --help\n\n"
 
 endsub
+
 //==============================================================================
 // Extract the received UART command
 //==============================================================================
@@ -376,16 +371,17 @@ function HandlerUartRxCmd() as integer
 
 	dim nMatch
 
-	// read UART data until CR
-	nMatch=UartReadMatch(stRsp$,13)
+	// read data until NL
+	nMatch=UartReadMatch(stRsp$,10)
 	if nMatch!=0 then
-		//CR exists in the input buffer
+		//NL exists in the input buffer
 		urtcmd$ = strsplitleft$(stRsp$, nMatch)
 		// process the received string
 		exitfunc OnUartCmd()
 	endif
 
 endfunc 1
+
 '//==============================================================================
 '// Called after SendMsgApp is called. Used to switch between command, rfcomm, and
 '// gatttool listen modes
@@ -401,15 +397,21 @@ function SetMode(msgID, cmd) as integer
 		// if rfcomm mode, UART data is send immediately over SPP
 		OnEvent	EVUARTRX					call HandlerUartRxSpp
 
-	elseif cmd == GATTTOOL_LISTEN then
-		// if rfcomm mode, UART data will be discarded as terminal
-		// is used for displaying notifications/indications
+	elseif cmd == GATTTOOL_LISTEN_MODE then
+		// if gatttool listen mode, UART data will be discarded as
+		// terminal is used for displaying notifications/indications
 		print "\nListening for notifications/indications. For hangup, type \22stop\22\n"
 		OnEvent	EVUARTRX					call HandlerUartRxLsn
+
+	elseif cmd == LEGACY_PIN_MODE then
+		// if in legacy pin mode, any data coming through the UART
+		// will be sent as the pin
+		OnEvent EVUARTRX					call HandlerUartRxPIN
 
 	endif
 
 endfunc 1
+
 //******************************************************************************
 
 //******************************************************************************

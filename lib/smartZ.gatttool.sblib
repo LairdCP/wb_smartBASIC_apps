@@ -1,16 +1,9 @@
 //******************************************************************************
 // Laird Technologies (c) 2014
 //
-// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-// +++++                                                                      ++
-// +++++  When UwTerminal downloads the app it will store it as a filenname   ++
-// +++++  which consists of all characters up to the first . and excluding it ++
-// +++++                                                                      ++
-// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-//
 // This library file provides gatttool commands to be used by smartZ and should be
 // #included into the file 'smartZ.sb' if running on a dual mode module
-// e.g. BT900. or a central single mode device e.g. BL620
+// e.g. LAIRD WB. or a central single mode device e.g. BL620
 //
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //		gatttool 
@@ -315,7 +308,7 @@ function _gattCharWrite() as integer
 
 	// If --listen is passed, switch mode to receive and display notifications
 	if gattLsn == 1 then
-		rc = SendMsgApp(0, GATTTOOL_LISTEN)
+		rc = SendMsgApp(0, GATTTOOL_LISTEN_MODE)
 		AssertResCode(rc)
 	endif
 
@@ -664,12 +657,12 @@ function HandlerUartRxLsn() as integer
 
 	dim nMatch
 
-	nMatch=UartReadMatch(stRsp$,13)
+	nMatch=UartReadMatch(stRsp$,10)
 	if nMatch!=0 then
-		//CR exists in the input buffer
+		//NL exists in the input buffer
 		urtcmd$ = strsplitleft$(stRsp$, nMatch)
 		tlen = ExtractStrToken(urtcmd$,tkn$)
-		if strcmp(tkn$,"stop")==0 then 
+		if strcmp(tkn$,"stop")==0 then
 			gattLsn = 0
 			print pr$
 			// "Stop" received, switch back to normal mode

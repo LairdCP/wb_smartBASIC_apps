@@ -1,16 +1,9 @@
 //******************************************************************************
 // Laird Technologies (c) 2014
 //
-// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-// +++++                                                                      ++
-// +++++  When UwTerminal downloads the app it will store it as a filenname   ++
-// +++++  which consists of all characters up to the first . and excluding it ++
-// +++++                                                                      ++
-// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-//
 // This library file provides hcitool commands to be used by smartZ and should be
 // #included into the file 'smartZ.sb' if running on a dual mode module
-// e.g. BT900.
+// e.g. LAIRD WB.
 //
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //		hcitool dev 		Display local devices
@@ -654,18 +647,9 @@ endfunc 1
 function HandlerPairReq()
 
 	dim s$
-    rc=BtcGetPAIRRequestBDAddr(s$)
+    rc = BtcGetPAIRRequestBDAddr(s$)
 	rc = BtcSendPAIRResp(1)
 	AssertResCode(rc)
-
-endfunc 1
-
-//==============================================================================
-// Called on a pin request from another device
-//==============================================================================
-function HandlerPINReq()
-
-	print "\nPIN feature will be added in future versions\n";pr$
 
 endfunc 1
 
@@ -678,6 +662,47 @@ function HandlerPairRes(res)
 		print "\nPaired\n";pr$
 	else
 		print "\nPairing attempt failed : ";res;"\n";pr$
+	endif
+
+endfunc 1
+
+//==============================================================================
+// Called on a pin request from another device
+//==============================================================================
+function HandlerPINReq()
+
+	dim s$
+    rc = BtcGetPINRequestBDAddr(s$)
+	s$ = StrHexize$(s$)
+	print "\nPairing request for device:\n";s$;"\n"
+	print "Enter PIN code for authentication:\n"
+	// Enter legacy PIN mode so that any UART incoming data is 
+	// handled as the PIN
+	rc = SendMsgApp(0, LEGACY_PIN_MODE)
+
+endfunc 1
+
+//==============================================================================
+// PIN has been entered by the user. Send the PIN to legacy device
+//==============================================================================
+function HandlerUartRxPIN()
+
+	dim nMatch
+	dim pin$
+
+	// read UART data until NL
+	nMatch=UartReadMatch(stRsp$,10)
+	if nMatch!=0 then
+		//NL exists in the input buffer
+		urtcmd$ = strsplitleft$(stRsp$, nMatch)
+		// Extract the PIN
+		rc = ExtractStrToken(urtcmd$,pin$)
+		// Send the PIN to the legacy device
+		rc = BtcSendPinResp(pin$)
+		AssertResCode(rc)
+		// Switch back to normal mode
+		print pr$
+		rc = SendMsgApp(0, NORMAL_MODE)
 	endif
 
 endfunc 1
