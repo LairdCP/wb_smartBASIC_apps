@@ -300,10 +300,11 @@ endfunc 1
 //------------------------------------------------------------------------------
 // Called when we have incoming data on the socket connection
 //------------------------------------------------------------------------------
-function HndlrSockDataRx(hConn, nLen)
+function HndlrSockDataRx()
 
 	dim data$					// On return this will contain data read from the socket connection
-	dim nLength					// On return this will contain the length of the string read
+	dim hConn                   // On return this will contain the handle of the connection
+    dim nLength					// On return this will contain the length of the string read
 
 	// Read the incoming socket data
 	rc = SocketReadData(data$, hConn, nLength)
