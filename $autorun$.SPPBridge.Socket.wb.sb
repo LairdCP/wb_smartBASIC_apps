@@ -124,8 +124,11 @@ dim fSocketConnection
 //--------------------------------------------------------------------------
 sub InitialiseBT()
 
-	// Set device to be disconverable inifinitely
-	rc = BtcSetDiscoverable(1, 0)
+	// Tone down the inquiry scan period and window
+	rc = BtcDiscoveryConfig(1, 0x0800)
+	rc = BtcDiscoveryConfig(2, 0x0012)
+	// Set device to be non-disconverable
+	rc = BtcSetDiscoverable(0, 0)
 	#cmpif DEBUG_FUNCTION_RC_FLAG : DbgAssertRC(1000)
 	// Set device to be connectable
 	rc = BtcSetConnectable(1)
@@ -225,6 +228,10 @@ function HndlrSPPConn(hConn, nRes)
 		hSPPConn = hConn
 		#cmpif DEBUG_BTCMSG_FLAG : sprint #dbg$,  "\nSPP Connected" : DbgPrint()
 
+        // Set device to be non-disconverable
+        rc = BtcSetDiscoverable(0, 0)
+        #cmpif DEBUG_FUNCTION_RC_FLAG : DbgAssertRC(5005)
+
 	endif
 
 endfunc 1
@@ -240,6 +247,13 @@ function HndlrSPPDiscon(hConn)
 		fSppConnection = 0
 		#cmpif DEBUG_BTCMSG_FLAG : sprint #dbg$,  "\nSPP Disconnected" : DbgPrint()
 	endif
+
+    if fSocketConnection == 0 then
+        // Set device to be disconverable
+        rc = BtcSetDiscoverable(1, 0)
+        #cmpif DEBUG_FUNCTION_RC_FLAG : DbgAssertRC(5005)
+    endif
+
 
 endfunc 1
 
@@ -280,6 +294,11 @@ function HndlrSockConn(hConn)
 		//store the SPP connection handle
 		hSocketConn = hConn
 		#cmpif DEBUG_SOCKETMSG_FLAG : sprint #dbg$,  "\nSocket Connected" : DbgPrint()
+
+        // Set device to be disconverable
+        rc = BtcSetDiscoverable(1, 0)
+        #cmpif DEBUG_FUNCTION_RC_FLAG : DbgAssertRC(5005)
+
 	endif
 
 endfunc 1
@@ -294,6 +313,10 @@ function HndlrSockDiscon(hConn)
 		// Clear the SPP connection flags so that we can accept future connections
 		fSocketConnection = 0
 		#cmpif DEBUG_SOCKETMSG_FLAG : sprint #dbg$,  "\nSocket Disconnected" : DbgPrint()
+
+        // Set device to be non-disconverable
+        rc = BtcSetDiscoverable(0, 0)
+        #cmpif DEBUG_FUNCTION_RC_FLAG : DbgAssertRC(5005)
 	endif
 endfunc 1
 
