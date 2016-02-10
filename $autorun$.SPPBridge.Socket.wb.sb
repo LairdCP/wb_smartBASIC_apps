@@ -88,6 +88,11 @@ dim fSppConnection
     //--------------------------------------------------------------------------
     //Flag if there is a 'Socket Connection'
 dim fSocketConnection
+    //--------------------------------------------------------------------------
+    //Flag if there is buffering occouring
+dim fBuffering
+
+dim sTXBuffer$
 
 //******************************************************************************
 // Debugging helper functions
@@ -104,14 +109,14 @@ dim fSocketConnection
 //--------------------------------------------------------------------------
 // For debugging :: will inspect the global 'rc' variable
 //--------------------------------------------------------------------------
-#cmpif DEBUG_FUNCTION_RC_FLAG : sub DbgAssertRC(ln as integer)   
+#cmpif DEBUG_FUNCTION_RC_FLAG : sub DbgAssertRC(ln as integer)
 #cmpif DEBUG_FUNCTION_RC_FLAG :     if rc!=0 then
 #cmpif DEBUG_FUNCTION_RC_FLAG :         sprint #dbg$, "\nDEBUG: Fail :";integer.h' rc;" at tag ";ln : DbgPrint()
 #cmpif DEBUG_FUNCTION_RC_FLAG :     endif
 #cmpif DEBUG_FUNCTION_RC_FLAG : endsub
 
 //--------------------------------------------------------------------------
-// For debugging :: will inspect that v1==v2     
+// For debugging :: will inspect that v1==v2
 //--------------------------------------------------------------------------
 #cmpif DEBUG_ASSERT_FLAG : sub DbgAssert(v1 as integer, v2 as integer, ln as integer)
 #cmpif DEBUG_ASSERT_FLAG :    if v1 != v2 then
@@ -184,7 +189,7 @@ endfunc 1
 function HandlerPINReq()
 
 	dim pin$					// The pin code to send to the legacy device
-	pin$ = BTC_PIN				// Change this define at the beginning of the file 
+	pin$ = BTC_PIN				// The pin code can be changed at the beginning of the file
 
 	rc = BtcSendPINResp(pin$)
 	#cmpif DEBUG_FUNCTION_RC_FLAG : DbgAssertRC(7100)
@@ -328,18 +333,49 @@ function HndlrSockDataRx()
 	dim data$					// On return this will contain data read from the socket connection
 	dim hConn                   // On return this will contain the handle of the connection
     dim nLength					// On return this will contain the length of the string read
+    dim wLength                 // On return this will contain the length of data written to SPP
 
-	// Read the incoming socket data
-	rc = SocketReadData(data$, hConn, nLength)
-	#cmpif DEBUG_FUNCTION_RC_FLAG : DbgAssertRC(6000)
-	#cmpif DEBUG_SOCKETMSG_FLAG : sprint #dbg$,  "\nSocket Data received : ";data$ : DbgPrint()
-	// We have incoming socket data, check if w have an SPP connection
-	if fSppConnection == 1 then
-		// BRIDGE: Send the received socket data over the SPP connection
-		rc = BtcSppWrite(hSPPConn, data$, nLength)
-		#cmpif DEBUG_FUNCTION_RC_FLAG : DbgAssertRC(6010)
-	endif
+    if fBuffering == 0 then
+        // Read the data that has arrived on the socket
+        rc = SocketReadData(sTXBuffer$, hConn, nLength)
+        #cmpif DEBUG_FUNCTION_RC_FLAG : DbgAssertRC(6000)
+        #cmpif DEBUG_SOCKETMSG_FLAG : sprint #dbg$,  "\nSocket Data received : ";data$ : DbgPrint()
 
+        if (nLength > 0) && (fSppConnection == 1) then
+            rc = BtcSppWrite(hSPPConn, sTXBuffer$, wLength)
+		    #cmpif DEBUG_FUNCTION_RC_FLAG : DbgAssertRC(6010)
+
+            if nLength != wLength then
+                fBuffering = 1
+                StrShiftLeft(sTXBuffer$, wLength)
+            else
+                sTXBuffer$ = ""
+            endif
+        endif
+    endif
+
+endfunc 1
+
+//------------------------------------------------------------------------------
+// Called when txbuffer is empty
+//------------------------------------------------------------------------------
+function HndlrSPPTxEmpty(i)
+    dim uLen, wLen
+    if fBuffering == 1 then
+        uLen = StrLen(sTXBuffer$)
+        rc = BtcSppWrite(hSPPConn, sTXBuffer$, wLen)
+        if wLen != uLen then
+            fBuffering = 1
+            StrShiftLeft(sTXBuffer$,wLen)
+        else
+            fBuffering = 0
+            sTXBuffer$ = ""
+
+            rc = HndlrSockDataRx()
+        endif
+    else
+        rc = HndlrSockDataRx()
+    endif
 endfunc 1
 
 //******************************************************************************
@@ -354,12 +390,13 @@ OnEvent  EVBTC_PAIR_REQUEST             call HandlerPairReq
 OnEvent  EVBTC_PIN_REQUEST              call HandlerPinReq
 OnEvent  EVBTC_PAIR_RESULT              call HandlerPairRes
 
-OnEvent EvSPPConn		        call HndlrSPPConn
-OnEvent EvSPPDiscon			call HndlrSPPDiscon
+OnEvent EvSPPConn                       call HndlrSPPConn
+OnEvent EvSPPDiscon                     call HndlrSPPDiscon
 OnEvent EVBTC_SPP_DATA_RECEIVED         call HndlrSPPData
+OnEvent EVSPPTXEMPTY                    call HndlrSPPTxEmpty
 
-OnEvent EVSOCKET_DATA_RECEIVED		call HndlrSockDataRx
-OnEvent EvSocketCONN	                call HndlrSockConn
+OnEvent EVSOCKET_DATA_RECEIVED          call HndlrSockDataRx
+OnEvent EvSocketCONN                    call HndlrSockConn
 OnEvent EvSocketDISCON                  call HndlrSockDiscon
 
 //------------------------------------------------------------------------------
